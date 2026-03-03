@@ -39,23 +39,23 @@ namespace PLCRegistersParsing.Simulation.ClientLogic
         // ---------------------------------------------------------
         public static string DecodeFloat(int hi, int lo)
         {
-            ushort uhi = unchecked((ushort)hi);
-            ushort ulo = unchecked((ushort)lo);
-
+            // lo = 23364;
+            // hi = 96;
             byte[] bytes = new byte[4];
 
-            // Big-endian Modbus order: hi word first
-            bytes[0] = (byte)(uhi >> 8);
-            bytes[1] = (byte)(uhi & 0xFF);
-            bytes[2] = (byte)(ulo >> 8);
-            bytes[3] = (byte)(ulo & 0xFF);
+            // hi word → bytes[0], bytes[1]
+            bytes[0] = (byte)(hi >> 8);
+            bytes[1] = (byte)(hi & 0xFF);
 
-            // Convert to little-endian if needed
-            if (BitConverter.IsLittleEndian)
-                Array.Reverse(bytes);
+            // lo word → bytes[2], bytes[3]
+            bytes[2] = (byte)(lo >> 8);
+            bytes[3] = (byte)(lo & 0xFF);
 
-            return Convert.ToString(BitConverter.ToSingle(bytes, 0), CultureInfo.InvariantCulture);
+            double decodeFloat = BitConverter.ToSingle(bytes, 0) * 1.0;
+            var outputString = decodeFloat.ToString("0.00", CultureInfo.InvariantCulture);
+            return outputString;
         }
+
 
         public static string DecodeInt(int value)
         {

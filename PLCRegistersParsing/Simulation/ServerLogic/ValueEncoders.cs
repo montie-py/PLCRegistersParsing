@@ -34,8 +34,8 @@ public static class ValueEncoders
         if (BitConverter.IsLittleEndian)
             Array.Reverse(bytes);
 
-        var hi = (short)BitConverter.ToUInt16(bytes, 0);
-        var lo = (short)BitConverter.ToUInt16(bytes, 2);
+        var lo = (short)BitConverter.ToUInt16(bytes, 0);
+        var hi = (short)BitConverter.ToUInt16(bytes, 2);
 
         output.Add(hi);
         output.Add(lo);
