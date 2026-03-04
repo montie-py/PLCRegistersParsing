@@ -6,5 +6,6 @@ public sealed record ServerCredentials(
     string Username,
     string Password,
     string UnitNamePrefix,
-    int unitsCount = 1
+    string UnitNameSuffix,
+    int UnitsCount = 1
 );
