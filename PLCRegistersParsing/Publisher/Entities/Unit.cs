@@ -1,5 +1,5 @@
 ﻿
-using UniBot.Enums;
+using PLCRegistersParsing.Publisher.Enums;
 
 namespace PLCRegistersParsing.Publisher.Entities
 {
@@ -12,9 +12,8 @@ namespace PLCRegistersParsing.Publisher.Entities
         public UnitStatusEnum CurrentStatus { get; set; }
         public int MeasurementInterval { get; set; }
         public int TransmissionInterval { get; set; }
-        public int NumberOfParameters { get; set; }
-        public Option ChallengeWaitTimeMode { get; set; }
-        public Option ACKWaitTimeMode { get; set; }
+        public int ChallengeWaitTimeMode { get; set; }
+        public int ACKWaitTimeMode { get; set; }
 
         public List<Parameter> Parameters { get; private set; }
         public List<UnitData> UnitData { get; private set; }
@@ -23,11 +22,11 @@ namespace PLCRegistersParsing.Publisher.Entities
         public Unit(string name, Options options, List<Parameter> parameters, int transmissionInterval, int measurementInterval)
         {
             Name = name;
-            UserName = options.User;
+            UserName = options.Username;
             Password = options.Password;
-            UseEncryption = options.Encrypt;
-            ChallengeWaitTimeMode = options.WaitForChallenge;
-            ACKWaitTimeMode = options.WaitForACK;
+            UseEncryption = options.UseEncryption;
+            ChallengeWaitTimeMode = options.WaitChallenge;
+            ACKWaitTimeMode = options.WaitAck;
             UnitData = new List<UnitData>();
             Parameters = parameters;
             TransmissionInterval = transmissionInterval;

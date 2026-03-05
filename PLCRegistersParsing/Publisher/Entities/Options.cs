@@ -1,24 +1,20 @@
-﻿
-namespace PLCRegistersParsing.Publisher.Entities
-{
-    public class Options
-    {
-        public string ServerAddress { get; set; }
-        public int ServerPort { get; set; }
-        public bool Encrypt { get; set; }
-        public string UnitNamePrefix { get; set; }
-        public string UnitNameSufix { get; set; }
-        public string User { get; set; }
-        public string Password { get; set; }
-        public Option UnitsQuantity { get; set; }
-        public Option TransmissionDelay { get; set; }
-        public Option UnitTransmissionInterval { get; set; }
-        public Option NumberOfParameters { get; set; }
-        public Option MeasurementTimeInterval { get; set; }
-        public Option WaitForChallenge { get; set; }
-        public Option WaitForACK { get; set; }
+﻿using PLCRegistersParsing.Publisher.Entities;
 
-    }
+namespace PLCRegistersParsing.Publisher;
 
-
-}
+public sealed record Options(
+    string Host,
+    int Port,
+    string Username,
+    string Password,
+    string UnitNamePrefix,
+    string UnitNameSuffix,
+    int UnitsCount,
+    int TransmissionDelay,
+    int UnitsQuantity,
+    int UnitTransmissionInterval,
+    int MeasurementsTimeInterval,
+    int WaitChallenge,
+    int WaitAck,
+    bool UseEncryption = true
+    );

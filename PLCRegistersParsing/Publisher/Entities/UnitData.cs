@@ -1,8 +1,8 @@
 ﻿
 using System.Net.Sockets;
 using System.Text;
-using UniBot.Enums;
-using UniBot.Services;
+using PLCRegistersParsing.Publisher.Enums;
+using PLCRegistersParsing.Publisher.Services;
 
 namespace PLCRegistersParsing.Publisher.Entities
 {
@@ -155,20 +155,8 @@ namespace PLCRegistersParsing.Publisher.Entities
 
             foreach (Parameter parameter in parameters)
             {
-                Random rnd = new Random();
-                int number = rnd.Next(0, 30);
-                double randomNumber = 0;
 
-                if (number <= 15)
-                {
-                    randomNumber = rnd.NextDouble() * (parameter.MaxValue - parameter.MinValue) + parameter.MinValue;
-                }
-                else
-                {
-                    randomNumber = rnd.Next(Convert.ToInt32(parameter.MinValue), Convert.ToInt32(parameter.MaxValue));
-                }
-
-                measurementLine += $";{parameter.Abbreviation};{randomNumber}";
+                measurementLine += $";{parameter.Abbreviation};{parameter.Value}";
             }
             measurementLine += "\r\n";
 
