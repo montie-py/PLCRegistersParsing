@@ -1,4 +1,6 @@
 ﻿
+using System.Collections.Generic;
+using System.Linq;
 using PLCRegistersParsing.Publisher.Enums;
 
 namespace PLCRegistersParsing.Publisher.Entities
@@ -31,18 +33,6 @@ namespace PLCRegistersParsing.Publisher.Entities
             Parameters = parameters;
             TransmissionInterval = transmissionInterval;
             MeasurementInterval = measurementInterval > transmissionInterval ? transmissionInterval : measurementInterval;
-        }
-
-        public UnitData GetLatestData()
-        {
-            UnitData latestData = UnitData.OrderByDescending(x => x.LatestUpdate).FirstOrDefault();
-
-            if (latestData == null)
-            {
-                latestData = new UnitData();
-            }
-            
-            return latestData;
         }
 
         public UnitData NewUnitData()

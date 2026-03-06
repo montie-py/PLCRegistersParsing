@@ -1,4 +1,7 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Text;
 using PLCRegistersParsing.Publisher.Entities;
 using PLCRegistersParsing.Publisher.Enums;
@@ -11,7 +14,6 @@ public class Fire
     private const string UnitName = "Unit";
     private List<Parameter> UnitParameters { get; set; }
     private Options FiringOptions { get; set; }
-    public static List<Unit> Units { get; set; }
 
     public Fire(List<Parameter> unitParameters)
     {
@@ -41,12 +43,12 @@ public class Fire
             WaitAck: 2000
         );
         
-        CreateUnit();
+        var unit = CreateUnit();
         
-        
+        HandleUnit(unit);
     }
 
-    private void CreateUnit()
+    private Unit CreateUnit()
     {
         var unitName = UnitName;
         var unitParameters = UnitParameters;
@@ -55,13 +57,13 @@ public class Fire
 
         Unit unit = new Unit(unitName, FiringOptions, unitParameters, unitTransmissionInterval,
             measurementsInterval);
-        Units.Add(unit);
+        return unit;
     }
 
-    private void HandleUnit(Unit unit, CancellationToken token)
+    private void HandleUnit(Unit unit)
     {
-        do
-        {
+        // do
+        // {
             try
             {
                 UnitData unitData = unit.NewUnitData();
@@ -85,7 +87,7 @@ public class Fire
                 // Confirm Receipt
                 ReceiveConfirmationReceipt(unitData);
                 
-                // Finish connectiond
+                // Finish connection
                 CloseConnection(unitData);
             }
             catch (Exception e)
@@ -93,7 +95,7 @@ public class Fire
                 Console.WriteLine(e);
                 throw;
             }
-        } while (!token.IsCancellationRequested);
+        // } while (!token.IsCancellationRequested);
     }
     
     private void SetUnitDataParams(UnitData unitData)
