@@ -11,20 +11,22 @@ namespace PLCRegistersParsing.Publisher;
 
 public class Fire
 {
-    private const string UnitName = "Unit";
+    private const string UnitName = "CWTUnit";
     private List<ParameterBase> UnitParameters { get; set; }
     private Options FiringOptions { get; set; }
+    private bool SendingBytes  { get; set; }
 
-    public Fire(List<ParameterBase> unitParameters)
+    public Fire(List<ParameterBase> unitParameters, bool sendingBytes)
     {
         UnitParameters = unitParameters;
+        SendingBytes = sendingBytes;
         var creds = new ServerCredentials(
             Environment.GetEnvironmentVariable("SERVER_HOST")!,
             int.Parse(Environment.GetEnvironmentVariable("SERVER_PORT")!),
             Environment.GetEnvironmentVariable("SERVER_USER")!,
             Environment.GetEnvironmentVariable("SERVER_PASS")!,
             Environment.GetEnvironmentVariable("UNIT_NAME_PREFIX")!,
-            Environment.GetEnvironmentVariable("UNIT_NAME_SUFFIX") ?? ""
+            Environment.GetEnvironmentVariable("MODULE_NAME") ?? "CWT"
         );
 
         FiringOptions = new Options(
@@ -34,7 +36,6 @@ public class Fire
             Password: creds.Password,
             UnitsCount: creds.UnitsCount,
             UnitNamePrefix: creds.UnitNamePrefix,
-            UnitNameSuffix: creds.UnitNameSuffix,
             TransmissionDelay: 1,
             UnitsQuantity: 1,
             UnitTransmissionInterval: 5,
@@ -44,7 +45,7 @@ public class Fire
         );
         
         var unit = CreateUnit();
-        
+        unit.ModuleName = creds.ModuleName;
         HandleUnit(unit);
     }
 
@@ -76,10 +77,13 @@ public class Fire
                 ReceiveChallenge(unitData);
                 
                 // Create the header
-                CreateMessage(unitData);
+                CreateMessage(unitData, sendingBytes:SendingBytes);
                 
                 // Encrypt Message
-                EncryptMessage(unitData);
+                EncryptMessage(unitData, sendingBytes:SendingBytes);
+                
+                // Assemble Message
+                AssembleMessage(unitData);
                 
                 // Send content
                 SendMessage(unitData);
@@ -111,7 +115,7 @@ public class Fire
         TCPService.Connect(unitData.Client, FiringOptions.Host, FiringOptions.Port);
         unitData.SetStatus(UnitStatusEnum.WaitingForChallenge);
 
-        Debug.WriteLine($"Unit {unitData.Unit.Name} sending connection request.");
+        Console.WriteLine($"Unit {unitData.Unit.Name} sending connection request.");
     }
     
     private void ReceiveChallenge(UnitData unitData)
@@ -138,15 +142,20 @@ public class Fire
         }
     }
     
-    private void CreateMessage(UnitData unitData)
+    private void CreateMessage(UnitData unitData, bool sendingBytes = false)
     {
-        unitData.CreateMessage();
+        unitData.CreateMessage(sendingBytes:sendingBytes);
     }
     
-    private void EncryptMessage(UnitData unitData)
+    private void EncryptMessage(UnitData unitData, bool sendingBytes = false)
     {
         string key = EncryptionService.GenerateMD5String($"{unitData.Challenge}{FiringOptions.Password}");
-        unitData.ContentBytes = EncryptionService.Encrypt(unitData.OriginalContent, key);
+        object encryptionContent = unitData.OriginalContent;
+        if (sendingBytes)
+        {
+            encryptionContent = unitData.OriginalContentBytesArray;
+        }
+        unitData.ContentBytes = EncryptionService.Encrypt(encryptionContent, key, sendingBytes:sendingBytes);
     }
     
     private void SendMessage(UnitData unitData)
@@ -186,6 +195,11 @@ public class Fire
 
         unitData.SetStatus(UnitStatusEnum.WaitingToTransmit);
         unitData.Status = UnitStatusEnum.Finished;
+    }
+    
+    private void AssembleMessage(UnitData unitData)
+    {
+        unitData.AssembleMessage();
     }
 
 }

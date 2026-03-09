@@ -1,8 +1,4 @@
-﻿
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Sockets;
+﻿using System.Net.Sockets;
 using System.Text;
 using PLCRegistersParsing.Publisher.Enums;
 using PLCRegistersParsing.Publisher.Services;
@@ -25,7 +21,9 @@ namespace PLCRegistersParsing.Publisher.Entities
         public string HashedPassword { get; set; }
         public string OriginalHeader { get; set; }
         public string OriginalContent { get; set; }
+        public byte[] OriginalContentBytesArray { get; set; }
         public string OriginalFullMessage { get; set; }
+        public byte[] OriginalFullMessageBytes { get; set; }
         public byte[] HeaderBytes { get; set; }
         public byte[] ContentBytes { get; set; }
         public byte[] FullMessageBytes { get; set; }
@@ -84,11 +82,19 @@ namespace PLCRegistersParsing.Publisher.Entities
             Unit.CurrentStatus = status;
         }
 
-        public void CreateMessage()
+        public void CreateMessage(bool sendingBytes = false)
         {
             SetHeader();
-            GenerateMessage();
-            OriginalFullMessage = OriginalHeader + OriginalContent;
+            GenerateMessage(sendingBytes:sendingBytes);
+
+            if (sendingBytes)
+            {
+                OriginalFullMessageBytes = OriginalContentBytesArray;
+            }
+            else
+            {
+                OriginalFullMessage = OriginalHeader + OriginalContent;
+            }
         }
 
         public void AssembleMessage()
@@ -96,6 +102,9 @@ namespace PLCRegistersParsing.Publisher.Entities
             ContentBytes = ContentBytes == null ? Encoding.UTF8.GetBytes(OriginalContent) : ContentBytes;
             HeaderBytes = Encoding.UTF8.GetBytes(OriginalHeader);
             FullMessageBytes = HeaderBytes.Concat(ContentBytes).ToArray();
+            // FullMessageBytes = HeaderBytes;
+            var text = Encoding.UTF8.GetString((FullMessageBytes));
+            var test = "";
         }
 
         private void SetHeader()
@@ -103,26 +112,31 @@ namespace PLCRegistersParsing.Publisher.Entities
             SetHeashedPassword();
             int transmissionIntervalSeconds = Unit.TransmissionInterval * 60;
 
-            OriginalHeader = $"CMD=1&MODULE=UNIB&V=1.0&SN={Unit.Name}&NAME=\"\"&INT={transmissionIntervalSeconds}&USR=\"{Unit.UserName}\"&PSW=\"{HashedPassword}\"";
+            OriginalHeader =
+                $"CMD=1&MODULE={Unit.ModuleName}&V=1.0&SN={Unit.Name}&NAME=\"\"&INT={transmissionIntervalSeconds}&USR=\"{Unit.UserName}\"&PSW=\"{HashedPassword}\"";
 
             if (Unit.UseEncryption)
             {
                 OriginalHeader += "&AES=128";
             }
+
             OriginalHeader += "\r\n";
         }
 
-        private void GenerateMessage()
+        private void GenerateMessage(bool sendingBytes = false)
         {
             // Checks how many measurements are necessary
             int measurementQuantity = Unit.TransmissionInterval / Unit.MeasurementInterval;
             string message;
+            byte[] messageBytes;
 
             message = SetMeasurementsHeader(Unit.Parameters);
+            messageBytes = Encoding.UTF8.GetBytes(message);
 
             for (int i = measurementQuantity - 1; i >= 0; i--)
             {
                 string measurementDateTime = DateTime.UtcNow.AddMinutes(-i).ToString("yyMMddHHmmss");
+                string systemErrorLog = "";
 
                 Random rnd = new Random();
                 int randomNumber = rnd.Next(0, 30);
@@ -130,14 +144,36 @@ namespace PLCRegistersParsing.Publisher.Entities
                 // Randomly generates a system error just for fun
                 if (randomNumber == 0)
                 {
-                    message += GenerateSystemErrorLog(measurementDateTime);
+                    systemErrorLog = GenerateSystemErrorLog(measurementDateTime);
+                    message += systemErrorLog;
                 }
 
-                // Generates measurements
-                message += GenerateMeasurements(Unit.Parameters, measurementDateTime);
+                if (sendingBytes)
+                {
+                    //adding systemErrorLog to byte[]
+                    var systemErrorLogBytes = Encoding.UTF8.GetBytes(systemErrorLog);
+                    messageBytes = messageBytes.Concat(systemErrorLogBytes).ToArray();
+                    
+                    //adding byteArray of the CSV file to the final byte[] array
+                    messageBytes = messageBytes.Concat(((BytesParameter)Unit.Parameters[0]).Value).ToArray();
+                }
+                else
+                {
+                    // Generates measurements
+                    message += GenerateMeasurements(Unit.Parameters, measurementDateTime);
+                }
             }
 
-            OriginalContent = message + (char)13 + (char)10 + (char)26;
+            //adding EOF
+            if (sendingBytes)
+            {
+                byte[] eof = { 13, 10, 26 };
+                OriginalContentBytesArray = messageBytes.Concat(eof).ToArray();
+            }
+            else
+            {
+                OriginalContent = message + (char)13 + (char)10 + (char)26;
+            }
         }
 
         private string SetMeasurementsHeader(List<ParameterBase> parameters)
@@ -147,6 +183,7 @@ namespace PLCRegistersParsing.Publisher.Entities
             {
                 messageHeader += $";{parameter.Abbreviation};{parameter.Name};{parameter.MeasurementUnit}";
             }
+
             messageHeader += "\r\n";
 
             return messageHeader;
@@ -158,8 +195,9 @@ namespace PLCRegistersParsing.Publisher.Entities
 
             foreach (ParameterBase parameter in parameters)
             {
-                measurementLine += $";{parameter.Abbreviation};{parameter.Value}";
+                measurementLine += $";{parameter.Abbreviation};{((StringParameter)parameter).Value}";
             }
+
             measurementLine += "\r\n";
 
             return measurementLine;

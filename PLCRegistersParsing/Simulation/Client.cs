@@ -13,7 +13,11 @@ using System.Threading;
 
 public class Client
 {
-    static string serverIp = Environment.GetEnvironmentVariable("SERVER_IP") ?? "127.0.0.1"; 
+    const string OutputFileName = "output.csv";
+    private const int CsvGenerationIntervalMillis = 5000;
+    
+    static string serverIp = Environment.GetEnvironmentVariable("SERVER_IP") ?? "127.0.0.1";
+    static bool sendingBytes = bool.TryParse(Environment.GetEnvironmentVariable("SENDING_BYTES"), out var value) && value;
     static ModbusClient client = new(serverIp, 1502);
     static List<List<string>> csvOutputList = new();
     static ManualResetEventSlim pauseEvent = new(false);
@@ -103,7 +107,7 @@ public class Client
     {
         while (true)
         {
-            Thread.Sleep(30000);
+            Thread.Sleep(CsvGenerationIntervalMillis);
 
             List<List<string>> snapshot;
 
@@ -117,7 +121,7 @@ public class Client
                 csvOutputList.Clear();
             }
 
-            using (var writer = new StreamWriter("output.csv"))
+            using (var writer = new StreamWriter(OutputFileName))
             {
                 foreach (var row in snapshot)
                 {
@@ -125,16 +129,43 @@ public class Client
                 }
             }
 
-            using (var reader = new StreamReader("output.csv"))
+            List<ParameterBase> parameters = new List<ParameterBase>();
+
+            if (sendingBytes)
             {
-                BytesParameter fireParameter = new BytesParameter
+                BytesParameter fireParameter = new()
                 {
-                    Value = Encoding.UTF8.GetBytes(reader.ReadToEnd())
+                    Value = File.ReadAllBytes(OutputFileName),
+                    Abbreviation = "Output",
+                    Name = "CWTOutput",
+                    MeasurementUnit = "CsvFile"
                 };
-                List<ParameterBase> parameters = new List<ParameterBase>();
+
                 parameters.Add(fireParameter);
-                new Fire(parameters);
             }
+            else
+            {
+                var pollingValuesHeadersArray = PollingValuesHeaders.PollingValuesHeadersArray;
+                using var reader = new StreamReader(OutputFileName);
+                string? line;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    var indices = line.Split(",");
+                    for (int i = 0; i < indices.Length; i++)
+                    {
+                        StringParameter fireParameter = new()
+                        {
+                            Value = indices[i],
+                            Abbreviation = pollingValuesHeadersArray[i].Abbreviation,
+                            Name = pollingValuesHeadersArray[i].Abbreviation,
+                            MeasurementUnit = pollingValuesHeadersArray[i].MeasurementUnit
+                        };
+                        parameters.Add(fireParameter);
+                    }
+                }
+            }
+            
+            new Fire(parameters, sendingBytes);
 
             Console.WriteLine($"CSV written with {snapshot.Count} rows");
 

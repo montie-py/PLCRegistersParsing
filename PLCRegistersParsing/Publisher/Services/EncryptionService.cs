@@ -9,10 +9,18 @@ namespace PLCRegistersParsing.Publisher.Services
 {
     public static class EncryptionService
     {
-        public static byte[] Encrypt(string toEncrypt, string key)
+        public static byte[] Encrypt(object toEncrypt, string key, bool sendingBytes = false)
         {
+            byte[] cipherText;
             byte[] Key = StringToByteArray(key);
-            byte[] cipherText = Encoding.UTF8.GetBytes(toEncrypt);
+            if (sendingBytes)
+            {
+                cipherText = (byte[])toEncrypt;
+            }
+            else
+            {
+                cipherText = Encoding.UTF8.GetBytes((string)toEncrypt);
+            }
             cipherText = AddControlBlock(cipherText);
             PadToMultipleOf(ref cipherText, 16);
 

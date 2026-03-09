@@ -16,6 +16,7 @@ namespace PLCRegistersParsing.Publisher.Entities
         public int TransmissionInterval { get; set; }
         public int ChallengeWaitTimeMode { get; set; }
         public int ACKWaitTimeMode { get; set; }
+        public string ModuleName { get; set; }
 
         public List<ParameterBase> Parameters { get; private set; }
         public List<UnitData> UnitData { get; private set; }

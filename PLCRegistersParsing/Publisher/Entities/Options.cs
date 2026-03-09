@@ -8,7 +8,6 @@ public sealed record Options(
     string Username,
     string Password,
     string UnitNamePrefix,
-    string UnitNameSuffix,
     int UnitsCount,
     int TransmissionDelay,
     int UnitsQuantity,
