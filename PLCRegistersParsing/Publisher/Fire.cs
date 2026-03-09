@@ -12,10 +12,10 @@ namespace PLCRegistersParsing.Publisher;
 public class Fire
 {
     private const string UnitName = "Unit";
-    private List<Parameter> UnitParameters { get; set; }
+    private List<ParameterBase> UnitParameters { get; set; }
     private Options FiringOptions { get; set; }
 
-    public Fire(List<Parameter> unitParameters)
+    public Fire(List<ParameterBase> unitParameters)
     {
         UnitParameters = unitParameters;
         var creds = new ServerCredentials(

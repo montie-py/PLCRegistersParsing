@@ -1,4 +1,7 @@
-﻿using PLCRegistersParsing.Simulation.ClientLogic;
+﻿using System.Text;
+using PLCRegistersParsing.Publisher;
+using PLCRegistersParsing.Publisher.Entities;
+using PLCRegistersParsing.Simulation.ClientLogic;
 
 namespace PLCRegistersParsing.Simulation;
 
@@ -120,6 +123,17 @@ public class Client
                 {
                     writer.WriteLine(string.Join(",", row));
                 }
+            }
+
+            using (var reader = new StreamReader("output.csv"))
+            {
+                BytesParameter fireParameter = new BytesParameter
+                {
+                    Value = Encoding.UTF8.GetBytes(reader.ReadToEnd())
+                };
+                List<ParameterBase> parameters = new List<ParameterBase>();
+                parameters.Add(fireParameter);
+                new Fire(parameters);
             }
 
             Console.WriteLine($"CSV written with {snapshot.Count} rows");

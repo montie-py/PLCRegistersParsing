@@ -17,11 +17,11 @@ namespace PLCRegistersParsing.Publisher.Entities
         public int ChallengeWaitTimeMode { get; set; }
         public int ACKWaitTimeMode { get; set; }
 
-        public List<Parameter> Parameters { get; private set; }
+        public List<ParameterBase> Parameters { get; private set; }
         public List<UnitData> UnitData { get; private set; }
 
 
-        public Unit(string name, Options options, List<Parameter> parameters, int transmissionInterval, int measurementInterval)
+        public Unit(string name, Options options, List<ParameterBase> parameters, int transmissionInterval, int measurementInterval)
         {
             Name = name;
             UserName = options.Username;

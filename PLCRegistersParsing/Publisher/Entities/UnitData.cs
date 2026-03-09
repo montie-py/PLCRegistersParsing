@@ -140,10 +140,10 @@ namespace PLCRegistersParsing.Publisher.Entities
             OriginalContent = message + (char)13 + (char)10 + (char)26;
         }
 
-        private string SetMeasurementsHeader(List<Parameter> parameters)
+        private string SetMeasurementsHeader(List<ParameterBase> parameters)
         {
             string messageHeader = "L";
-            foreach (Parameter parameter in parameters)
+            foreach (ParameterBase parameter in parameters)
             {
                 messageHeader += $";{parameter.Abbreviation};{parameter.Name};{parameter.MeasurementUnit}";
             }
@@ -152,13 +152,12 @@ namespace PLCRegistersParsing.Publisher.Entities
             return messageHeader;
         }
 
-        private string GenerateMeasurements(List<Parameter> parameters, string measurementTime)
+        private string GenerateMeasurements(List<ParameterBase> parameters, string measurementTime)
         {
             string measurementLine = $"D;{measurementTime}";
 
-            foreach (Parameter parameter in parameters)
+            foreach (ParameterBase parameter in parameters)
             {
-
                 measurementLine += $";{parameter.Abbreviation};{parameter.Value}";
             }
             measurementLine += "\r\n";
