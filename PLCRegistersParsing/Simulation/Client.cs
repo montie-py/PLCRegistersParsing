@@ -1,4 +1,5 @@
 ﻿using System.Text;
+using PLCRegistersParsing.Config;
 using PLCRegistersParsing.Publisher;
 using PLCRegistersParsing.Publisher.Entities;
 using PLCRegistersParsing.Simulation.ClientLogic;
@@ -11,10 +12,11 @@ using System.Collections.Generic;
 using System.IO; 
 using System.Threading;
 
-public class Client
+public class Client : IPublisher
 {
     const string OutputFileName = "output.csv";
-    private const int CsvGenerationIntervalMillis = 5000;
+    private static readonly int _csvGenerationIntervalMillis = int.Parse(Environment.GetEnvironmentVariable("PUBLISHING_INTERVAL")!);
+    private static List<DeviceConfig> DevicesConfigs { get; set; }
     
     static string serverIp = Environment.GetEnvironmentVariable("SERVER_IP") ?? "127.0.0.1";
     static bool sendingBytes = bool.TryParse(Environment.GetEnvironmentVariable("SENDING_BYTES"), out var value) && value;
@@ -30,8 +32,10 @@ public class Client
         {2, "int"}
     };
 
-    public static void Run()
+    public static void Run(List<DeviceConfig> devicesConfig)
     {
+        DevicesConfigs = devicesConfig;
+        
         Thread pollingThread = new Thread(PollingLoop) { IsBackground = true };
         Thread csvWriterThread = new Thread(CsvWriterLoop) { IsBackground = true };
 
@@ -107,7 +111,7 @@ public class Client
     {
         while (true)
         {
-            Thread.Sleep(CsvGenerationIntervalMillis);
+            Thread.Sleep(_csvGenerationIntervalMillis);
 
             List<List<string>> snapshot;
 
@@ -129,47 +133,55 @@ public class Client
                 }
             }
 
-            List<ParameterBase> parameters = new List<ParameterBase>();
-
-            if (sendingBytes)
+            foreach (var deviceConfig in DevicesConfigs)
             {
-                BytesParameter fireParameter = new()
-                {
-                    Value = File.ReadAllBytes(OutputFileName),
-                    Abbreviation = "Output",
-                    Name = "CWTOutput",
-                    MeasurementUnit = "CsvFile"
-                };
-
-                parameters.Add(fireParameter);
+                SendingDataToFieldTracker(snapshot, deviceConfig);
             }
-            else
-            {
-                var pollingValuesHeadersArray = PollingValuesHeaders.PollingValuesHeadersArray;
-                using var reader = new StreamReader(OutputFileName);
-                string? line;
-                while ((line = reader.ReadLine()) != null)
-                {
-                    var indices = line.Split(",");
-                    for (int i = 0; i < indices.Length; i++)
-                    {
-                        StringParameter fireParameter = new()
-                        {
-                            Value = indices[i],
-                            Abbreviation = pollingValuesHeadersArray[i].Abbreviation,
-                            Name = pollingValuesHeadersArray[i].Abbreviation,
-                            MeasurementUnit = pollingValuesHeadersArray[i].MeasurementUnit
-                        };
-                        parameters.Add(fireParameter);
-                    }
-                }
-            }
-            
-            new Fire(parameters, sendingBytes);
-
-            Console.WriteLine($"CSV written with {snapshot.Count} rows");
 
             pauseEvent.Reset(); // resume polling
         }
+    }
+
+    private static void SendingDataToFieldTracker(List<List<string>> snapshot, DeviceConfig deviceConfig)
+    {
+        List<ParameterBase> parameters = new List<ParameterBase>();
+
+        if (sendingBytes)
+        {
+            BytesParameter fireParameter = new()
+            {
+                Value = File.ReadAllBytes(OutputFileName),
+                Abbreviation = "Output",
+                Name = "CWTOutput",
+                MeasurementUnit = "CsvFile"
+            };
+
+            parameters.Add(fireParameter);
+        }
+        else
+        {
+            var pollingValuesHeadersArray = PollingValuesHeaders.PollingValuesHeadersArray;
+            using var reader = new StreamReader(OutputFileName);
+            string? line;
+            while ((line = reader.ReadLine()) != null)
+            {
+                var indices = line.Split(",");
+                for (int i = 0; i < indices.Length; i++)
+                {
+                    StringParameter fireParameter = new()
+                    {
+                        Value = indices[i],
+                        Abbreviation = pollingValuesHeadersArray[i].Abbreviation,
+                        Name = pollingValuesHeadersArray[i].Abbreviation,
+                        MeasurementUnit = pollingValuesHeadersArray[i].MeasurementUnit
+                    };
+                    parameters.Add(fireParameter);
+                }
+            }
+        }
+            
+        new Fire(parameters, sendingBytes, deviceConfig);
+
+        Console.WriteLine($"CSV written with {snapshot.Count} rows");
     }
 }

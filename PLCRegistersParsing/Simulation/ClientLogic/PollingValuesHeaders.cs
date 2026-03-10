@@ -1,4 +1,6 @@
-﻿namespace PLCRegistersParsing.Simulation.ClientLogic
+﻿using System.Collections.Generic;
+
+namespace PLCRegistersParsing.Simulation.ClientLogic
 {
     public sealed record PollingValuesHeaders()
     {

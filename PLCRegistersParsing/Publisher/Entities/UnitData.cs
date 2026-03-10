@@ -1,4 +1,7 @@
-﻿using System.Net.Sockets;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net.Sockets;
 using System.Text;
 using PLCRegistersParsing.Publisher.Enums;
 using PLCRegistersParsing.Publisher.Services;
@@ -82,10 +85,10 @@ namespace PLCRegistersParsing.Publisher.Entities
             Unit.CurrentStatus = status;
         }
 
-        public void CreateMessage(bool sendingBytes = false)
+        public void CreateMessage(bool sendingBytes = false, bool settingMessageHeader = true)
         {
             SetHeader();
-            GenerateMessage(sendingBytes:sendingBytes);
+            GenerateMessage(sendingBytes:sendingBytes, settingMessageHeader:settingMessageHeader);
 
             if (sendingBytes)
             {
@@ -102,9 +105,6 @@ namespace PLCRegistersParsing.Publisher.Entities
             ContentBytes = ContentBytes == null ? Encoding.UTF8.GetBytes(OriginalContent) : ContentBytes;
             HeaderBytes = Encoding.UTF8.GetBytes(OriginalHeader);
             FullMessageBytes = HeaderBytes.Concat(ContentBytes).ToArray();
-            // FullMessageBytes = HeaderBytes;
-            var text = Encoding.UTF8.GetString((FullMessageBytes));
-            var test = "";
         }
 
         private void SetHeader()
@@ -113,7 +113,7 @@ namespace PLCRegistersParsing.Publisher.Entities
             int transmissionIntervalSeconds = Unit.TransmissionInterval * 60;
 
             OriginalHeader =
-                $"CMD=1&MODULE={Unit.ModuleName}&V=1.0&SN={Unit.Name}&NAME=\"\"&INT={transmissionIntervalSeconds}&USR=\"{Unit.UserName}\"&PSW=\"{HashedPassword}\"";
+                $"CMD=1&MODULE={Unit.ModuleName}&V=1.0&SN={Unit.Name}&NAME={Unit.Name}&INT={transmissionIntervalSeconds}&USR=\"{Unit.UserName}\"&PSW=\"{HashedPassword}\"";
 
             if (Unit.UseEncryption)
             {
@@ -123,16 +123,18 @@ namespace PLCRegistersParsing.Publisher.Entities
             OriginalHeader += "\r\n";
         }
 
-        private void GenerateMessage(bool sendingBytes = false)
+        private void GenerateMessage(bool sendingBytes = false, bool settingMessageHeader = true)
         {
             // Checks how many measurements are necessary
             int measurementQuantity = Unit.TransmissionInterval / Unit.MeasurementInterval;
-            string message;
-            byte[] messageBytes;
+            string message = "";
+            byte[] messageBytes = Encoding.UTF8.GetBytes(message);
 
-            message = SetMeasurementsHeader(Unit.Parameters);
-            messageBytes = Encoding.UTF8.GetBytes(message);
-
+            if (settingMessageHeader)
+            {
+                message = SetMeasurementsHeader(Unit.Parameters);
+            }
+            
             for (int i = measurementQuantity - 1; i >= 0; i--)
             {
                 string measurementDateTime = DateTime.UtcNow.AddMinutes(-i).ToString("yyMMddHHmmss");

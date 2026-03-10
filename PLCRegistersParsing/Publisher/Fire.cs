@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using PLCRegistersParsing.Config;
 using PLCRegistersParsing.Publisher.Entities;
 using PLCRegistersParsing.Publisher.Enums;
 using PLCRegistersParsing.Publisher.Services;
@@ -15,17 +16,19 @@ public class Fire
     private List<ParameterBase> UnitParameters { get; set; }
     private Options FiringOptions { get; set; }
     private bool SendingBytes  { get; set; }
+    
+    private static bool SettingMessageHeader = bool.TryParse(Environment.GetEnvironmentVariable("SET_MESSAGE_HEADER"), out var value) && value;
 
-    public Fire(List<ParameterBase> unitParameters, bool sendingBytes)
+    public Fire(List<ParameterBase> unitParameters, bool sendingBytes, DeviceConfig deviceConfig)
     {
         UnitParameters = unitParameters;
         SendingBytes = sendingBytes;
         var creds = new ServerCredentials(
-            Environment.GetEnvironmentVariable("SERVER_HOST")!,
-            int.Parse(Environment.GetEnvironmentVariable("SERVER_PORT")!),
-            Environment.GetEnvironmentVariable("SERVER_USER")!,
-            Environment.GetEnvironmentVariable("SERVER_PASS")!,
-            Environment.GetEnvironmentVariable("UNIT_NAME_PREFIX")!,
+            deviceConfig.ServerHost,
+            deviceConfig.ServerPort,
+            deviceConfig.ServerUser,
+            deviceConfig.ServerPass,
+            deviceConfig.UnitPrefix,
             Environment.GetEnvironmentVariable("MODULE_NAME") ?? "CWT"
         );
 
@@ -46,6 +49,7 @@ public class Fire
         
         var unit = CreateUnit();
         unit.ModuleName = creds.ModuleName;
+        unit.SerialNumber = deviceConfig.SerialNumber;
         HandleUnit(unit);
     }
 
@@ -77,7 +81,7 @@ public class Fire
                 ReceiveChallenge(unitData);
                 
                 // Create the header
-                CreateMessage(unitData, sendingBytes:SendingBytes);
+                CreateMessage(unitData, sendingBytes:SendingBytes, settingMessageHeader:SettingMessageHeader);
                 
                 // Encrypt Message
                 EncryptMessage(unitData, sendingBytes:SendingBytes);
@@ -142,9 +146,9 @@ public class Fire
         }
     }
     
-    private void CreateMessage(UnitData unitData, bool sendingBytes = false)
+    private void CreateMessage(UnitData unitData, bool sendingBytes = false, bool settingMessageHeader = true)
     {
-        unitData.CreateMessage(sendingBytes:sendingBytes);
+        unitData.CreateMessage(sendingBytes:sendingBytes, settingMessageHeader:settingMessageHeader);
     }
     
     private void EncryptMessage(UnitData unitData, bool sendingBytes = false)
