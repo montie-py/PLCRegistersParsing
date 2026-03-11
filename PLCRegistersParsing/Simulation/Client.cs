@@ -6,72 +6,121 @@ using PLCRegistersParsing.Simulation.ClientLogic;
 
 namespace PLCRegistersParsing.Simulation;
 
-using EasyModbus; 
-using System; 
-using System.Collections.Generic; 
-using System.IO; 
+using EasyModbus;
+using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 
 public class Client : IPublisher
 {
-    const string OutputFileName = "output.csv";
-    private static readonly int _csvGenerationIntervalMillis = int.Parse(Environment.GetEnvironmentVariable("PUBLISHING_INTERVAL")!);
-    private static List<DeviceConfig> DevicesConfigs { get; set; }
-    
-    static string serverIp = Environment.GetEnvironmentVariable("SERVER_IP") ?? "127.0.0.1";
-    static bool sendingBytes = bool.TryParse(Environment.GetEnvironmentVariable("SENDING_BYTES"), out var value) && value;
-    static ModbusClient client = new(serverIp, 1502);
-    static List<List<string>> csvOutputList = new();
-    static ManualResetEventSlim pauseEvent = new(false);
-    static object listLock = new();
 
-    static Dictionary<int, string> decodeMap = new()
+    static bool sendingBytes =
+        bool.TryParse(Environment.GetEnvironmentVariable("SENDING_BYTES"), out var value) && value;
+
+    public static async Task Run(List<DeviceConfig> devicesConfigs)
     {
-        {0, "date"},
-        {1, "time"},
-        {2, "int"}
-    };
+        // cancellation token will be triggered when Ctrl+C is pressed
+        var cts = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, __) => cts.Cancel();
 
-    public static void Run(List<DeviceConfig> devicesConfig)
-    {
-        DevicesConfigs = devicesConfig;
-        
-        Thread pollingThread = new Thread(PollingLoop) { IsBackground = true };
-        Thread csvWriterThread = new Thread(CsvWriterLoop) { IsBackground = true };
+        var tasks = new List<Task>();
 
-        pollingThread.Start();
-        csvWriterThread.Start();
+        // polling from all the devices
+        foreach (var deviceConfig in devicesConfigs)
+        {
+            var localConfig = deviceConfig;
+            var localConnection = new ModbusClient(localConfig.DeviceIp, localConfig.DevicePort);
+            
+            if (!localConnection.Connected)
+                localConnection.Connect();
+            
+            int[] registers =
+                localConnection.ReadHoldingRegisters(localConfig.RegistersRangeFrom,
+                    localConfig.RegistersRangeTo);
+            
+            List<List<string>> csvOutputList = new();
+            ManualResetEventSlim pauseEvent = new(false);
+            object listLock = new();
 
-        while (true)
-            Thread.Sleep(1000);
+            Dictionary<int, string> decodeMap = new()
+            {
+                { 0, "date" },
+                { 1, "time" },
+                { 2, "int" }
+            };
+
+            var outputFileName = $"output_{localConfig.DeviceIp}.csv";
+            
+            var deviceRuntime = new DeviceRuntime();
+            deviceRuntime.Config = localConfig;
+            deviceRuntime.Connection = localConnection;
+            deviceRuntime.CsvBuffer = csvOutputList;
+            deviceRuntime.BufferLock = listLock;
+            deviceRuntime.PauseEvent = pauseEvent;
+            deviceRuntime.DecodeMap = decodeMap;
+            deviceRuntime.OutputFilename = outputFileName;
+            
+            if (!deviceRuntime.Connection.Connected)
+                deviceRuntime.Connection.Connect();
+
+            tasks.Add(Task.Run(() => PollingLoop(cts.Token, deviceRuntime)));
+            tasks.Add(Task.Run(() => CsvWriterLoop(cts.Token, deviceRuntime)));
+        }
+
+
+        try
+        {
+            await Task.WhenAll(tasks);
+        }
+        catch (Exception ex)
+        {
+            var allExceptions = new AggregateException(tasks.Where(t => t.IsFaulted).SelectMany(t => t.Exception.InnerExceptions));
+            foreach (var innerEx in allExceptions.InnerExceptions)
+            {
+                Console.WriteLine($"Inner exception: {innerEx.Message}");
+            }
+        }
+
+        // Thread pollingThread = new Thread(PollingLoop) { IsBackground = true };
+        // Thread csvWriterThread = new Thread(CsvWriterLoop) { IsBackground = true };
+        //
+        // pollingThread.Start();
+        // csvWriterThread.Start();
+
+        // while (true)
+        //     Thread.Sleep(1000);
     }
 
-    static void PollingLoop()
+    static void PollingLoop(CancellationToken token, DeviceRuntime deviceRuntime)
     {
-        while (true)
+        try
         {
-            if (pauseEvent.IsSet)
+            while (!token.IsCancellationRequested)
             {
-                Thread.Sleep(100);
-                continue;
-            }
+                
+                if (deviceRuntime.PauseEvent.IsSet)
+                {
+                    Thread.Sleep(int.TryParse(Environment.GetEnvironmentVariable("POLLING_LOOP_PAUSE_MILLS"),
+                        out var pauseMills)
+                        ? pauseMills
+                        : 50);
+                    continue;
+                }
 
-            try
-            {
-                if (!client.Connected)
-                    client.Connect();
+                int[] registers =
+                    deviceRuntime.Connection.ReadHoldingRegisters(deviceRuntime.Config.RegistersRangeFrom,
+                        deviceRuntime.Config.RegistersRangeTo);
 
-                int[] registers = client.ReadHoldingRegisters(0, 57);
-
-                lock (listLock)
+                lock (deviceRuntime.BufferLock)
                 {
                     var parsedRegisters = new List<string>();
-                    for (int i = 0, decodeMapIndex = 0;  i < registers.Length-1; i++)
+                    for (int i = 0, decodeMapIndex = 0; i < registers.Length - 1; i++)
                     {
                         string registerValue;
-                        if (decodeMap.ContainsKey(decodeMapIndex))
+                        if (deviceRuntime.DecodeMap.ContainsKey(decodeMapIndex))
                         {
-                            switch (decodeMap[decodeMapIndex])
+                            switch (deviceRuntime.DecodeMap[decodeMapIndex])
                             {
                                 case "date":
                                     registerValue = ValueDecoders.DecodeDate(registers[i], registers[i + 1]);
@@ -81,7 +130,6 @@ public class Client : IPublisher
                                     registerValue = ValueDecoders.DecodeTime(registers[i], registers[i + 1]);
                                     i++;
                                     break;
-                                case "int":
                                 default:
                                     registerValue = ValueDecoders.DecodeInt(registers[i]);
                                     break;
@@ -92,57 +140,70 @@ public class Client : IPublisher
                             registerValue = ValueDecoders.DecodeFloat(registers[i], registers[i + 1]);
                             i++;
                         }
+
                         parsedRegisters.Add(registerValue);
-                        ++decodeMapIndex;
+                        decodeMapIndex++;
                     }
-                    csvOutputList.Add(parsedRegisters);
+
+                    deviceRuntime.CsvBuffer.Add(parsedRegisters);
                 }
+                
+                Thread.Sleep(int.TryParse(Environment.GetEnvironmentVariable("POLLING_LOOP_INTERVAL_MILLS"),
+                    out var intervalMills)
+                    ? intervalMills
+                    : 1000);
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Exception: " + ex.Message);
-            }
-
-            Thread.Sleep(5000);
+        
         }
-    }
-
-    static void CsvWriterLoop()
-    {
-        while (true)
+        catch (Exception ex)
         {
-            Thread.Sleep(_csvGenerationIntervalMillis);
-
-            List<List<string>> snapshot;
-
-            lock (listLock)
-            {
-                if (csvOutputList.Count == 0)
-                    continue;
-
-                pauseEvent.Set(); // pause polling
-                snapshot = new List<List<string>>(csvOutputList);
-                csvOutputList.Clear();
-            }
-
-            using (var writer = new StreamWriter(OutputFileName))
-            {
-                foreach (var row in snapshot)
-                {
-                    writer.WriteLine(string.Join(",", row));
-                }
-            }
-
-            foreach (var deviceConfig in DevicesConfigs)
-            {
-                SendingDataToFieldTracker(snapshot, deviceConfig);
-            }
-
-            pauseEvent.Reset(); // resume polling
+            Console.WriteLine("PollingLoop while() Exception: " + ex.Message);
         }
     }
 
-    private static void SendingDataToFieldTracker(List<List<string>> snapshot, DeviceConfig deviceConfig)
+    static void CsvWriterLoop(CancellationToken token, DeviceRuntime deviceRuntime)
+    {
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                Thread.Sleep(int.TryParse(Environment.GetEnvironmentVariable("PUBLISHING_LOOP_INTERVAL_MILLS"),
+                    out var intervalMills)
+                    ? intervalMills
+                    : 1000);
+
+                List<List<string>> snapshot;
+
+                lock (deviceRuntime.BufferLock)
+                {
+                    if (deviceRuntime.CsvBuffer.Count == 0)
+                        continue;
+
+                    deviceRuntime.PauseEvent.Set(); // pause polling
+                    snapshot = new List<List<string>>(deviceRuntime.CsvBuffer);
+                    deviceRuntime.CsvBuffer.Clear();
+                }
+
+                using (var writer = new StreamWriter(deviceRuntime.OutputFilename))
+                {
+                    foreach (var row in snapshot)
+                    {
+                        writer.WriteLine(string.Join(",", row));
+                    }
+                }
+
+                SendingDataToFieldTracker(snapshot, deviceRuntime.Config.SerialNumber, deviceRuntime.OutputFilename);
+
+                deviceRuntime.PauseEvent.Reset(); // resume polling
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("CsvWriterLoop Exception: " + ex.Message);
+        }
+    }
+
+    private static void SendingDataToFieldTracker(List<List<string>> snapshot, string serialNumber, string outputFileName)
     {
         List<ParameterBase> parameters = new List<ParameterBase>();
 
@@ -150,7 +211,7 @@ public class Client : IPublisher
         {
             BytesParameter fireParameter = new()
             {
-                Value = File.ReadAllBytes(OutputFileName),
+                Value = File.ReadAllBytes(outputFileName),
                 Abbreviation = "Output",
                 Name = "CWTOutput",
                 MeasurementUnit = "CsvFile"
@@ -161,7 +222,7 @@ public class Client : IPublisher
         else
         {
             var pollingValuesHeadersArray = PollingValuesHeaders.PollingValuesHeadersArray;
-            using var reader = new StreamReader(OutputFileName);
+            using var reader = new StreamReader(outputFileName);
             string? line;
             while ((line = reader.ReadLine()) != null)
             {
@@ -179,8 +240,8 @@ public class Client : IPublisher
                 }
             }
         }
-            
-        new Fire(parameters, sendingBytes, deviceConfig);
+
+        new Fire(parameters, sendingBytes, serialNumber);
 
         Console.WriteLine($"CSV written with {snapshot.Count} rows");
     }

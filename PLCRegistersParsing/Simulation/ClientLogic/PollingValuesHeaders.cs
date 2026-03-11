@@ -14,147 +14,147 @@ namespace PLCRegistersParsing.Simulation.ClientLogic
             PollingValuesHeadersArray.AddRange(
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Date",
+                    Abbreviation = "DATE",
                     MeasurementUnit = ""
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Time",
+                    Abbreviation = "TIME",
                     MeasurementUnit = ""
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Milliseconds",
+                    Abbreviation = "MILLIS",
                     MeasurementUnit = ""
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Worker Inlet Conductivity",
+                    Abbreviation = "WIC",
                     MeasurementUnit = "uS"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Worker Inlet Temperature",
+                    Abbreviation = "WIT",
                     MeasurementUnit = "C"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Worker Pre Pump Pressure",
+                    Abbreviation = "WPrePP",
                     MeasurementUnit = "PSI"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Worker Post Pump Pressure",
+                    Abbreviation = "WPosPP",
                     MeasurementUnit = "PSI"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Worker Product Pressure",
+                    Abbreviation = "WPP",
                     MeasurementUnit = "PSI"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Worker Product Flow",
+                    Abbreviation = "WPF",
                     MeasurementUnit = "GPM"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Worker Product Temperature",
+                    Abbreviation = "WPT",
                     MeasurementUnit = "C"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Worker Waste Flow",
+                    Abbreviation = "WWF",
                     MeasurementUnit = "GPM"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Worker Recycle Flow",
+                    Abbreviation = "WRF",
                     MeasurementUnit = "GPM"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Worker Product Conductivity",
+                    Abbreviation = "WPC",
                     MeasurementUnit = "uS"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Polisher Inlet Conductivity",
+                    Abbreviation = "PIC",
                     MeasurementUnit = "uS"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Polisher Inlet Temperature",
+                    Abbreviation = "PIT",
                     MeasurementUnit = "C"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Polisher Pre Pump Pressure",
+                    Abbreviation = "PPrePP",
                     MeasurementUnit = "PSI"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Polisher Post Pump Pressure",
+                    Abbreviation = "PPosPP",
                     MeasurementUnit = "PSI"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Polisher Product Pressure",
+                    Abbreviation = "PPP",
                     MeasurementUnit = "PSI"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Polisher Product Flow",
+                    Abbreviation = "PPF",
                     MeasurementUnit = "GPM"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Polisher Product Temperature",
+                    Abbreviation = "PPT",
                     MeasurementUnit = "C"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Polisher Waste Flow",
+                    Abbreviation = "PWF",
                     MeasurementUnit = "GPM"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Polisher Recycle Flow",
+                    Abbreviation = "PRF",
                     MeasurementUnit = "GPM"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Polisher Product Conductivity",
+                    Abbreviation = "PPC",
                     MeasurementUnit = "uS"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "System Product Conductivity",
+                    Abbreviation = "SPC",
                     MeasurementUnit = "uS"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "-Reserved-",
+                    Abbreviation = "RES1",
                     MeasurementUnit = ""
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "-Reserved-",
+                    Abbreviation = "RES2",
                     MeasurementUnit = ""
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "-Reserved-",
+                    Abbreviation = "RES3",
                     MeasurementUnit = ""
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Worker Inlet Flow",
+                    Abbreviation = "WIF",
                     MeasurementUnit = "GPM, calc"
                 },
                 new PollingValuesHeaders
                 {
-                    Abbreviation = "Polisher Inlet Flow",
+                    Abbreviation = "PIF",
                     MeasurementUnit = "GPM, calc"
                 }
             );

@@ -13,7 +13,7 @@ class Program
 {
     private static List<DeviceConfig>? DevicesConfig { get; set; }
     
-    static void Main(string[] args)
+    static async Task Main(string[] args)
     {
         LoadConfig();
         
@@ -26,7 +26,7 @@ class Program
         switch (args[0].ToLower())
         {
             case "client":
-                Client.Run(DevicesConfig);
+                await Client.Run(DevicesConfig);
                 break;
 
             case "server":

@@ -19,16 +19,16 @@ public class Fire
     
     private static bool SettingMessageHeader = bool.TryParse(Environment.GetEnvironmentVariable("SET_MESSAGE_HEADER"), out var value) && value;
 
-    public Fire(List<ParameterBase> unitParameters, bool sendingBytes, DeviceConfig deviceConfig)
+    public Fire(List<ParameterBase> unitParameters, bool sendingBytes, string serialNumber)
     {
         UnitParameters = unitParameters;
         SendingBytes = sendingBytes;
         var creds = new ServerCredentials(
-            deviceConfig.ServerHost,
-            deviceConfig.ServerPort,
-            deviceConfig.ServerUser,
-            deviceConfig.ServerPass,
-            deviceConfig.UnitPrefix,
+            Environment.GetEnvironmentVariable("SERVER_HOST")!,
+            int.Parse(Environment.GetEnvironmentVariable("SERVER_PORT")!),
+            Environment.GetEnvironmentVariable("SERVER_USER")!,
+            Environment.GetEnvironmentVariable("SERVER_PASS")!,
+            Environment.GetEnvironmentVariable("UNIT_NAME_PREFIX")!,
             Environment.GetEnvironmentVariable("MODULE_NAME") ?? "CWT"
         );
 
@@ -49,7 +49,7 @@ public class Fire
         
         var unit = CreateUnit();
         unit.ModuleName = creds.ModuleName;
-        unit.SerialNumber = deviceConfig.SerialNumber;
+        unit.SerialNumber = serialNumber;
         HandleUnit(unit);
     }
 

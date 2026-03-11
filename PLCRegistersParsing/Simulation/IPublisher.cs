@@ -5,5 +5,5 @@ namespace PLCRegistersParsing.Simulation;
 
 public interface IPublisher
 {
-    public static abstract void Run(List<DeviceConfig> devicesConfig);
+    public static abstract Task Run(List<DeviceConfig> devicesConfig);
 }
