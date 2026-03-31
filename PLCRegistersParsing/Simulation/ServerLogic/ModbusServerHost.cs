@@ -5,11 +5,16 @@ namespace PLCRegistersParsing.Simulation.ServerLogic;
 public class ModbusServerHost
 {
     public ModbusServer Server { get; }
+    private int ModBusServerPort { get; set; }
     public ModbusServerHost()
     {
+        ModBusServerPort = int.TryParse(Environment.GetEnvironmentVariable("POLLING_LOOP_INTERVAL_MILLS"),
+            out var intervalMills)
+            ? intervalMills
+            : 502;
         Server = new ModbusServer
         {
-            Port = 1502,
+            Port = ModBusServerPort,
             UnitIdentifier = 1
         };
 
@@ -21,6 +26,6 @@ public class ModbusServerHost
     public void Start()
     {
         Server.Listen();
-        Console.WriteLine("Modbus TCP server started on port 1502");
+        Console.WriteLine("Modbus TCP server started on port {0}",  ModBusServerPort);
     }
 }

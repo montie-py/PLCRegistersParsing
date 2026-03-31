@@ -130,39 +130,48 @@ namespace PLCRegistersParsing.Publisher.Entities
             string message = "";
             byte[] messageBytes = Encoding.UTF8.GetBytes(message);
 
-            if (settingMessageHeader)
+            for (int i = 0; i < Unit.ParametersList.Count; i++)
             {
-                message = SetMeasurementsHeader(Unit.Parameters);
-            }
+                if (settingMessageHeader)
+                {
+                    message += SetMeasurementsHeader(Unit.ParametersList[i]);
+                }
             
-            for (int i = measurementQuantity - 1; i >= 0; i--)
-            {
-                string measurementDateTime = DateTime.UtcNow.AddMinutes(-i).ToString("yyMMddHHmmss");
-                string systemErrorLog = "";
-
-                Random rnd = new Random();
-                int randomNumber = rnd.Next(0, 30);
-
-                // Randomly generates a system error just for fun
-                if (randomNumber == 0)
+                for (int j = measurementQuantity - 1; j >= 0; j--)
                 {
-                    systemErrorLog = GenerateSystemErrorLog(measurementDateTime);
-                    message += systemErrorLog;
-                }
+                    string measurementDateTime = DateTime.UtcNow.AddMinutes(-j).ToString("yyMMddHHmmss");
+                    string systemErrorLog = "";
 
-                if (sendingBytes)
-                {
-                    //adding systemErrorLog to byte[]
-                    var systemErrorLogBytes = Encoding.UTF8.GetBytes(systemErrorLog);
-                    messageBytes = messageBytes.Concat(systemErrorLogBytes).ToArray();
+                    // Random rnd = new Random();
+                    // int randomNumber = rnd.Next(0, 30);
+                    //
+                    // // Randomly generates a system error just for fun
+                    // if (randomNumber == 0)
+                    // {
+                    //     systemErrorLog = GenerateSystemErrorLog(measurementDateTime);
+                    //     message += systemErrorLog;
+                    // }
+
+                    if (sendingBytes)
+                    {
+                        //adding systemErrorLog to byte[]
+                        var systemErrorLogBytes = Encoding.UTF8.GetBytes(systemErrorLog);
+                        messageBytes = messageBytes.Concat(systemErrorLogBytes).ToArray();
                     
-                    //adding byteArray of the CSV file to the final byte[] array
-                    messageBytes = messageBytes.Concat(((BytesParameter)Unit.Parameters[0]).Value).ToArray();
-                }
-                else
-                {
-                    // Generates measurements
-                    message += GenerateMeasurements(Unit.Parameters, measurementDateTime);
+                        //adding byteArray of the CSV file to the final byte[] array
+                        messageBytes = messageBytes.Concat(((BytesParameter)Unit.ParametersList[i][0]).Value).ToArray();
+                    }
+                    else
+                    {
+                        // Generates measurements
+                        message += GenerateMeasurements(Unit.ParametersList[i], measurementDateTime);
+                    }
+
+                    if (i == Unit.ParametersList.Count - 1)
+                    {
+                        message += "\r\n";
+                    }
+                        
                 }
             }
 

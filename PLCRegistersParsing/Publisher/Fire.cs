@@ -13,13 +13,13 @@ namespace PLCRegistersParsing.Publisher;
 public class Fire
 {
     private const string UnitName = "CWTUnit";
-    private List<ParameterBase> UnitParameters { get; set; }
+    private List<List<ParameterBase>> UnitParameters { get; set; }
     private Options FiringOptions { get; set; }
     private bool SendingBytes  { get; set; }
     
     private static bool SettingMessageHeader = bool.TryParse(Environment.GetEnvironmentVariable("SET_MESSAGE_HEADER"), out var value) && value;
 
-    public Fire(List<ParameterBase> unitParameters, bool sendingBytes, string serialNumber)
+    public Fire(List<List<ParameterBase>> unitParameters, bool sendingBytes, string serialNumber)
     {
         UnitParameters = unitParameters;
         SendingBytes = sendingBytes;

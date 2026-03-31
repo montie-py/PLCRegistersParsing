@@ -1,10 +1,8 @@
-﻿using System.Text;
-using PLCRegistersParsing.Config;
-using PLCRegistersParsing.Publisher;
-using PLCRegistersParsing.Publisher.Entities;
-using PLCRegistersParsing.Simulation.ClientLogic;
-
-namespace PLCRegistersParsing.Simulation;
+﻿namespace PLCRegistersParsing.Simulation;
+using Config;
+using Publisher;
+using Publisher.Entities;
+using ClientLogic;
 
 using EasyModbus;
 using System;
@@ -34,10 +32,6 @@ public class Client : IPublisher
             
             if (!localConnection.Connected)
                 localConnection.Connect();
-            
-            int[] registers =
-                localConnection.ReadHoldingRegisters(localConfig.RegistersRangeFrom,
-                    localConfig.RegistersRangeTo);
             
             List<List<string>> csvOutputList = new();
             ManualResetEventSlim pauseEvent = new(false);
@@ -81,15 +75,6 @@ public class Client : IPublisher
                 Console.WriteLine($"Inner exception: {innerEx.Message}");
             }
         }
-
-        // Thread pollingThread = new Thread(PollingLoop) { IsBackground = true };
-        // Thread csvWriterThread = new Thread(CsvWriterLoop) { IsBackground = true };
-        //
-        // pollingThread.Start();
-        // csvWriterThread.Start();
-
-        // while (true)
-        //     Thread.Sleep(1000);
     }
 
     static void PollingLoop(CancellationToken token, DeviceRuntime deviceRuntime)
@@ -114,6 +99,7 @@ public class Client : IPublisher
 
                 lock (deviceRuntime.BufferLock)
                 {
+                    // decoding registers' values
                     var parsedRegisters = new List<string>();
                     for (int i = 0, decodeMapIndex = 0; i < registers.Length - 1; i++)
                     {
@@ -174,16 +160,18 @@ public class Client : IPublisher
 
                 List<List<string>> snapshot;
 
+                // pause polling
                 lock (deviceRuntime.BufferLock)
                 {
                     if (deviceRuntime.CsvBuffer.Count == 0)
                         continue;
 
-                    deviceRuntime.PauseEvent.Set(); // pause polling
+                    deviceRuntime.PauseEvent.Set();
                     snapshot = new List<List<string>>(deviceRuntime.CsvBuffer);
                     deviceRuntime.CsvBuffer.Clear();
                 }
 
+                //generating a separate CSV file (not for fieldtracker)
                 using (var writer = new StreamWriter(deviceRuntime.OutputFilename))
                 {
                     foreach (var row in snapshot)
@@ -192,9 +180,11 @@ public class Client : IPublisher
                     }
                 }
 
+                //sending data to fieldtracker
                 SendingDataToFieldTracker(snapshot, deviceRuntime.Config.SerialNumber, deviceRuntime.OutputFilename);
 
-                deviceRuntime.PauseEvent.Reset(); // resume polling
+                // resume polling
+                deviceRuntime.PauseEvent.Reset();
             }
         }
         catch (Exception ex)
@@ -205,11 +195,11 @@ public class Client : IPublisher
 
     private static void SendingDataToFieldTracker(List<List<string>> snapshot, string serialNumber, string outputFileName)
     {
-        List<ParameterBase> parameters = new List<ParameterBase>();
+        List<List<ParameterBase>> parameters = new();
 
         if (sendingBytes)
         {
-            BytesParameter fireParameter = new()
+            ParameterBase fireParameter = new BytesParameter
             {
                 Value = File.ReadAllBytes(outputFileName),
                 Abbreviation = "Output",
@@ -217,27 +207,28 @@ public class Client : IPublisher
                 MeasurementUnit = "CsvFile"
             };
 
-            parameters.Add(fireParameter);
+            List<ParameterBase> fireParameters = new ([fireParameter]);
+
+            parameters.Add(fireParameters);
         }
         else
         {
             var pollingValuesHeadersArray = PollingValuesHeaders.PollingValuesHeadersArray;
-            using var reader = new StreamReader(outputFileName);
-            string? line;
-            while ((line = reader.ReadLine()) != null)
+            foreach (var row in snapshot)
             {
-                var indices = line.Split(",");
-                for (int i = 0; i < indices.Length; i++)
+                List<ParameterBase> rowParameters = new();
+                for (int i = 0; i < row.Count; i++)
                 {
                     StringParameter fireParameter = new()
                     {
-                        Value = indices[i],
+                        Value = row[i],
                         Abbreviation = pollingValuesHeadersArray[i].Abbreviation,
                         Name = pollingValuesHeadersArray[i].Abbreviation,
                         MeasurementUnit = pollingValuesHeadersArray[i].MeasurementUnit
                     };
-                    parameters.Add(fireParameter);
+                    rowParameters.Add(fireParameter);
                 }
+                parameters.Add(rowParameters);
             }
         }
 

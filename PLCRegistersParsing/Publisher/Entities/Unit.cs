@@ -19,11 +19,11 @@ namespace PLCRegistersParsing.Publisher.Entities
         public string ModuleName { get; set; }
         public string SerialNumber { get; set; }
 
-        public List<ParameterBase> Parameters { get; private set; }
+        public List<List<ParameterBase>> ParametersList { get; private set; }
         public List<UnitData> UnitData { get; private set; }
 
 
-        public Unit(string name, Options options, List<ParameterBase> parameters, int transmissionInterval, int measurementInterval)
+        public Unit(string name, Options options, List<List<ParameterBase>> parametersList, int transmissionInterval, int measurementInterval)
         {
             Name = name;
             UserName = options.Username;
@@ -32,7 +32,7 @@ namespace PLCRegistersParsing.Publisher.Entities
             ChallengeWaitTimeMode = options.WaitChallenge;
             ACKWaitTimeMode = options.WaitAck;
             UnitData = new List<UnitData>();
-            Parameters = parameters;
+            ParametersList = parametersList;
             TransmissionInterval = transmissionInterval;
             MeasurementInterval = measurementInterval > transmissionInterval ? transmissionInterval : measurementInterval;
         }
