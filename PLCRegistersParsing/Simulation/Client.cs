@@ -69,11 +69,12 @@ public class Client : IPublisher
         }
         catch (Exception ex)
         {
-            var allExceptions = new AggregateException(tasks.Where(t => t.IsFaulted).SelectMany(t => t.Exception.InnerExceptions));
+            var allExceptions = new AggregateException(tasks.Where(t => t.IsFaulted).SelectMany(t => t.Exception!.InnerExceptions));
             foreach (var innerEx in allExceptions.InnerExceptions)
             {
                 Console.WriteLine($"Inner exception: {innerEx.Message}");
             }
+            Console.WriteLine($"Outer exception: {ex.Message}");
         }
     }
 
@@ -94,7 +95,7 @@ public class Client : IPublisher
                 }
 
                 int[] registers =
-                    deviceRuntime.Connection.ReadHoldingRegisters(deviceRuntime.Config.RegistersRangeFrom,
+                    deviceRuntime.Connection!.ReadHoldingRegisters(deviceRuntime.Config!.RegistersRangeFrom,
                         deviceRuntime.Config.RegistersRangeTo);
 
                 lock (deviceRuntime.BufferLock)
@@ -172,7 +173,7 @@ public class Client : IPublisher
                 }
 
                 //generating a separate CSV file (not for fieldtracker)
-                using (var writer = new StreamWriter(deviceRuntime.OutputFilename))
+                using (var writer = new StreamWriter(deviceRuntime.OutputFilename!))
                 {
                     foreach (var row in snapshot)
                     {
@@ -181,7 +182,7 @@ public class Client : IPublisher
                 }
 
                 //sending data to fieldtracker
-                SendingDataToFieldTracker(snapshot, deviceRuntime.Config.SerialNumber, deviceRuntime.OutputFilename);
+                SendingDataToFieldTracker(snapshot, deviceRuntime.Config!.SerialNumber!, deviceRuntime.OutputFilename!);
 
                 // resume polling
                 deviceRuntime.PauseEvent.Reset();

@@ -23,7 +23,7 @@ class Program
         switch (args[0].ToLower())
         {
             case "client":
-                await Client.Run(DevicesConfig);
+                await Client.Run(DevicesConfig!);
                 break;
 
             case "server":

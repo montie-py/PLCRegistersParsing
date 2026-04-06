@@ -43,7 +43,7 @@ namespace PLCRegistersParsing.Publisher.Services
 
             do
             {
-                stream.Read(buffer, 0, bufferSize);
+                stream.ReadExactly(buffer, 0, bufferSize);
                 bufferList.AddRange(buffer);
                 bufferSize = client.Available;
                 buffer = new byte[bufferSize];

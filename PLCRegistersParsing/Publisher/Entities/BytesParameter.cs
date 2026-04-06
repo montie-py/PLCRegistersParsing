@@ -2,5 +2,5 @@
 
 public class BytesParameter : ParameterBase
 {
-    public byte[] Value { get; set; }
+    public new byte[]? Value { get; set; }
 }

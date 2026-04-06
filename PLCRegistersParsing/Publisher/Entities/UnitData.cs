@@ -10,7 +10,7 @@ namespace PLCRegistersParsing.Publisher.Entities
 {
     public class UnitData
     {
-        public Unit Unit { get; set; }
+        public Unit? Unit { get; set; }
         public int ChallengeWaitTime { get; set; }
         public int ACKWaitTime { get; set; }
         public DateTime LatestUpdate { get; private set; }
@@ -20,21 +20,17 @@ namespace PLCRegistersParsing.Publisher.Entities
         public DateTime LastTransmittedDateTime { get; private set; }
         public DateTime LastReceivedDateTime { get; private set; }
         public UnitStatusEnum Status { get; set; }
-        public string Challenge { get; private set; }
-        public string HashedPassword { get; set; }
-        public string OriginalHeader { get; set; }
-        public string OriginalContent { get; set; }
-        public byte[] OriginalContentBytesArray { get; set; }
-        public string OriginalFullMessage { get; set; }
-        public byte[] OriginalFullMessageBytes { get; set; }
-        public byte[] HeaderBytes { get; set; }
-        public byte[] ContentBytes { get; set; }
-        public byte[] FullMessageBytes { get; set; }
-        public TcpClient Client { get; set; }
-
-        public UnitData()
-        {
-        }
+        public string? Challenge { get; private set; }
+        public string? HashedPassword { get; set; }
+        public string? OriginalHeader { get; set; }
+        public string? OriginalContent { get; set; }
+        public byte[]? OriginalContentBytesArray { get; set; }
+        public string? OriginalFullMessage { get; set; }
+        public byte[]? OriginalFullMessageBytes { get; set; }
+        public byte[]? HeaderBytes { get; set; }
+        public byte[]? ContentBytes { get; set; }
+        public byte[]? FullMessageBytes { get; set; }
+        public TcpClient? Client { get; set; }
 
         public UnitData(Unit unit)
         {
@@ -75,14 +71,14 @@ namespace PLCRegistersParsing.Publisher.Entities
 
         private void SetHeashedPassword()
         {
-            string hashedPassword = EncryptionService.GenerateMD5String($"{Unit.Password}{Challenge}");
+            string hashedPassword = EncryptionService.GenerateMD5String($"{Unit!.Password}{Challenge}");
             HashedPassword = hashedPassword;
         }
 
         public void SetStatus(UnitStatusEnum status)
         {
             Status = status;
-            Unit.CurrentStatus = status;
+            if (Unit != null) Unit.CurrentStatus = status;
         }
 
         public void CreateMessage(bool sendingBytes = false, bool settingMessageHeader = true)
@@ -102,15 +98,18 @@ namespace PLCRegistersParsing.Publisher.Entities
 
         public void AssembleMessage()
         {
+            FullMessageBytes = null;
+            if (OriginalHeader == null || OriginalContent == null) return;
             ContentBytes = ContentBytes == null ? Encoding.UTF8.GetBytes(OriginalContent) : ContentBytes;
             HeaderBytes = Encoding.UTF8.GetBytes(OriginalHeader);
             FullMessageBytes = HeaderBytes.Concat(ContentBytes).ToArray();
+
         }
 
         private void SetHeader()
         {
             SetHeashedPassword();
-            int transmissionIntervalSeconds = Unit.TransmissionInterval * 60;
+            int transmissionIntervalSeconds = Unit!.TransmissionInterval * 60;
 
             OriginalHeader =
                 $"CMD=1&MODULE={Unit.ModuleName}&V=1.0&SN={Unit.Name}&NAME={Unit.Name}&INT={transmissionIntervalSeconds}&USR=\"{Unit.UserName}\"&PSW=\"{HashedPassword}\"";
@@ -126,7 +125,7 @@ namespace PLCRegistersParsing.Publisher.Entities
         private void GenerateMessage(bool sendingBytes = false, bool settingMessageHeader = true)
         {
             // Checks how many measurements are necessary
-            int measurementQuantity = Unit.TransmissionInterval / Unit.MeasurementInterval;
+            int measurementQuantity = Unit!.TransmissionInterval / Unit.MeasurementInterval;
             string message = "";
             byte[] messageBytes = Encoding.UTF8.GetBytes(message);
 
@@ -159,7 +158,7 @@ namespace PLCRegistersParsing.Publisher.Entities
                         messageBytes = messageBytes.Concat(systemErrorLogBytes).ToArray();
                     
                         //adding byteArray of the CSV file to the final byte[] array
-                        messageBytes = messageBytes.Concat(((BytesParameter)Unit.ParametersList[i][0]).Value).ToArray();
+                        messageBytes = messageBytes.Concat(((BytesParameter)Unit.ParametersList[i][0]).Value!).ToArray();
                     }
                     else
                     {

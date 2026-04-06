@@ -2,5 +2,5 @@
 
 public class StringParameter : ParameterBase
 {
-    public string Value { get; set; }
+    public new string? Value { get; set; }
 }

@@ -6,6 +6,6 @@ public sealed record ServerCredentials(
     string Username,
     string Password,
     string UnitNamePrefix,
-    string ModuleName,
+    string? ModuleName,
     int UnitsCount = 1
 );

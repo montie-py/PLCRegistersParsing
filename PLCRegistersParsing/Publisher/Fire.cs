@@ -108,7 +108,7 @@ public class Fire
     
     private void SetUnitDataParams(UnitData unitData)
     {
-        unitData.ChallengeWaitTime = unitData.Unit.ChallengeWaitTimeMode;
+        unitData.ChallengeWaitTime = unitData.Unit!.ChallengeWaitTimeMode;
         unitData.ACKWaitTime =unitData.Unit.ACKWaitTimeMode;
     }
     
@@ -116,17 +116,17 @@ public class Fire
     {
         unitData.SetStatus(UnitStatusEnum.Transmitting);
         unitData.SetFirstTransmissionDateTime(DateTime.Now);
-        TCPService.Connect(unitData.Client, FiringOptions.Host, FiringOptions.Port);
+        TCPService.Connect(unitData.Client!, FiringOptions.Host, FiringOptions.Port);
         unitData.SetStatus(UnitStatusEnum.WaitingForChallenge);
 
-        Console.WriteLine($"Unit {unitData.Unit.Name} sending connection request.");
+        Console.WriteLine($"Unit {unitData.Unit!.Name} sending connection request.");
     }
     
     private void ReceiveChallenge(UnitData unitData)
     {
         try
         {
-            byte[] receivedChallenge = TCPService.ReadData(unitData.Client, unitData.ChallengeWaitTime).Result;
+            byte[] receivedChallenge = TCPService.ReadData(unitData.Client!, unitData.ChallengeWaitTime).Result;
             string challenge = Encoding.ASCII.GetString(receivedChallenge);
 
             unitData.SetChallenge(challenge, DateTime.Now);
@@ -154,17 +154,17 @@ public class Fire
     private void EncryptMessage(UnitData unitData, bool sendingBytes = false)
     {
         string key = EncryptionService.GenerateMD5String($"{unitData.Challenge}{FiringOptions.Password}");
-        object encryptionContent = unitData.OriginalContent;
+        object encryptionContent = unitData.OriginalContent!;
         if (sendingBytes)
         {
-            encryptionContent = unitData.OriginalContentBytesArray;
+            encryptionContent = unitData.OriginalContentBytesArray!;
         }
         unitData.ContentBytes = EncryptionService.Encrypt(encryptionContent, key, sendingBytes:sendingBytes);
     }
     
     private void SendMessage(UnitData unitData)
     {
-        TCPService.SendData(unitData.Client, unitData.FullMessageBytes);
+        TCPService.SendData(unitData.Client!, unitData.FullMessageBytes!);
         unitData.SetStatus(UnitStatusEnum.WaitingForACK);
         unitData.SetLastTransmittedDateTime(DateTime.Now);
     }
@@ -173,7 +173,7 @@ public class Fire
     {
         try
         {
-            byte[] receivedConfirmation = TCPService.ReadData(unitData.Client, unitData.ACKWaitTime).Result;
+            byte[] receivedConfirmation = TCPService.ReadData(unitData.Client!, unitData.ACKWaitTime).Result;
             string challenge = Encoding.ASCII.GetString(receivedConfirmation);
             unitData.SetACKReceived(DateTime.Now);
         }
@@ -195,7 +195,7 @@ public class Fire
     
     private void CloseConnection(UnitData unitData)
     {
-        TCPService.CloseConnection(unitData.Client);
+        TCPService.CloseConnection(unitData.Client!);
 
         unitData.SetStatus(UnitStatusEnum.WaitingToTransmit);
         unitData.Status = UnitStatusEnum.Finished;
