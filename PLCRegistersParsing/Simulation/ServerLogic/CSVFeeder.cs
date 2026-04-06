@@ -4,21 +4,24 @@ namespace PLCRegistersParsing.Simulation.ServerLogic;
 
 public class CSVFeeder
 {
-    private readonly ModbusServer _server;
     private readonly string _csvPath;
 
-    public CSVFeeder(ModbusServer server, string csvPath)
+    public CSVFeeder(string csvPath)
     {
-        _server = server;
         _csvPath = csvPath;
     }
 
-    public void Start()
+    public void Start(Action<List<short>> sendCSVvalues)
     {
-        new Thread(FeedLoop) { IsBackground = true }.Start();
+        var thread = new Thread(() => FeedLoop(sendCSVvalues))
+        {
+            IsBackground = true
+        };
+
+        thread.Start();
     }
 
-    private void FeedLoop()
+    private void FeedLoop(Action<List<short>> sendCSVvalues)
     {
         using var reader = new StreamReader(_csvPath);
         string? header = reader.ReadLine(); // skip header
@@ -43,10 +46,7 @@ public class CSVFeeder
                     ValueEncoders.EncodeInt(value, values);
             }
 
-            for (int i = 0; i < values.Count && i < _server.holdingRegisters.localArray.Length; i++)
-            {
-                _server.holdingRegisters[i+1] = values[i];
-            }
+           sendCSVvalues(values);
 
             Console.WriteLine("Updated registers: " + string.Join(", ", values));
 
