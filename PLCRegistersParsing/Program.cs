@@ -16,7 +16,7 @@ class Program
         
         if (args.Length == 0)
         {
-            Console.WriteLine("Specify 'client' or 'server'");
+            Console.WriteLine("Specify 'client', 'server', or 'publish_plc'");
             return;
         }
 
@@ -27,7 +27,11 @@ class Program
                 break;
 
             case "server":
-                Server.Run();
+                await ServerSimulation.Run(DevicesConfig!);
+                break;
+            
+            case "publish_plc":
+                await PublishToPLC.Run(DevicesConfig!);
                 break;
 
             default:

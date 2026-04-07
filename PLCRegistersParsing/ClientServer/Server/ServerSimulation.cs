@@ -1,15 +1,14 @@
-﻿using PLCRegistersParsing.Simulation.ServerLogic;
+﻿using PLCRegistersParsing.Config;
+using PLCRegistersParsing.Simulation.ServerLogic;
 
 namespace PLCRegistersParsing.Simulation;
 
-public class Server
+public class ServerSimulation : IRunnable
 {
-    public static void Run()
+    public static async Task Run(List<DeviceConfig> devicesConfigs)
     {
-        string csvPath = Path.Combine(AppContext.BaseDirectory, "input.csv");
-
         var host = new ModbusServerHost();
-        var feeder = new CSVFeeder(csvPath);
+        var feeder = new CSVFeeder();
         Action<List<short>> sendCSVvalues = values =>
         {
             for (int i = 0; i < values.Count && i < host.Server.holdingRegisters.localArray.Length; i++)

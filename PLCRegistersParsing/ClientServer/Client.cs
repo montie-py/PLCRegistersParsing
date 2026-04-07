@@ -10,7 +10,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 
-public class Client : IPublisher
+public class Client : IPublisher, IRunnable
 {
 
     static bool sendingBytes =

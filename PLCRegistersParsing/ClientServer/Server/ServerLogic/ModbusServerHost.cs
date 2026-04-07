@@ -8,9 +8,9 @@ public class ModbusServerHost
     private int ModBusServerPort { get; set; }
     public ModbusServerHost()
     {
-        ModBusServerPort = int.TryParse(Environment.GetEnvironmentVariable("POLLING_LOOP_INTERVAL_MILLS"),
-            out var intervalMills)
-            ? intervalMills
+        ModBusServerPort = int.TryParse(Environment.GetEnvironmentVariable("SERVER_PORT"),
+            out var serverPort)
+            ? serverPort
             : 502;
         Server = new ModbusServer
         {

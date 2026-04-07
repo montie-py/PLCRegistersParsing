@@ -6,9 +6,9 @@ public class CSVFeeder
 {
     private readonly string _csvPath;
 
-    public CSVFeeder(string csvPath)
+    public CSVFeeder()
     {
-        _csvPath = csvPath;
+        _csvPath = Path.Combine(AppContext.BaseDirectory, "input.csv");;
     }
 
     public void Start(Action<List<short>> sendCSVvalues)
@@ -46,7 +46,7 @@ public class CSVFeeder
                     ValueEncoders.EncodeInt(value, values);
             }
 
-           sendCSVvalues(values);
+            sendCSVvalues(values);
 
             Console.WriteLine("Updated registers: " + string.Join(", ", values));
 
