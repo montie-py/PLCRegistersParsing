@@ -11,15 +11,19 @@ public class PublishToPLC : IRunnable
         var feeder = new CSVFeeder();
         
         plcPublisher.Client.Connect();
+        // plcPublisher.Client.LogFileFilename = "here";
         Action<List<short>> sendCSVvalues = values =>
         {
             for (int i = 0; i < values.Count && i < plcPublisher.holdingRegistersLength; i++)
             {
-                plcPublisher.Client.WriteSingleRegister(i+1, values[i]);
+                // plcPublisher.Client.WriteSingleRegister(i, values[i]);
+                
+                List<int> intValued = values.Select(v => Convert.ToInt32(v)).ToList();
+                
+                plcPublisher.Client.WriteMultipleRegisters(0, intValued.ToArray());
             }
         };
         feeder.Start(sendCSVvalues);
-        plcPublisher.Client.Disconnect();
        
 
         Thread.Sleep(Timeout.Infinite);
