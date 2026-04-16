@@ -12,8 +12,8 @@ using System.Threading;
 
 public class Client : IPublisher, IRunnable
 {
-
-    static bool sendingBytes =
+    static bool _isDebugMode = bool.TryParse(Environment.GetEnvironmentVariable("DEBUG"), out var value) && value;
+    static bool _sendingBytes =
         bool.TryParse(Environment.GetEnvironmentVariable("SENDING_BYTES"), out var value) && value;
 
     public static async Task Run(List<DeviceConfig> devicesConfigs)
@@ -59,7 +59,10 @@ public class Client : IPublisher, IRunnable
                 deviceRuntime.Connection.Connect();
 
             tasks.Add(Task.Run(() => PollingLoop(cts.Token, deviceRuntime)));
-            tasks.Add(Task.Run(() => CsvWriterLoop(cts.Token, deviceRuntime)));
+            if (!_isDebugMode)
+            {
+                tasks.Add(Task.Run(() => CsvWriterLoop(cts.Token, deviceRuntime)));
+            }
         }
 
 
@@ -132,6 +135,11 @@ public class Client : IPublisher, IRunnable
                         decodeMapIndex++;
                     }
 
+                    if (_isDebugMode)
+                    {
+                        Console.WriteLine("Registers: " + string.Join(", ", parsedRegisters));
+                    }
+
                     deviceRuntime.CsvBuffer.Add(parsedRegisters);
                 }
                 
@@ -198,7 +206,7 @@ public class Client : IPublisher, IRunnable
     {
         List<List<ParameterBase>> parameters = new();
 
-        if (sendingBytes)
+        if (_sendingBytes)
         {
             ParameterBase fireParameter = new BytesParameter
             {
@@ -233,7 +241,7 @@ public class Client : IPublisher, IRunnable
             }
         }
 
-        new Fire(parameters, sendingBytes, serialNumber);
+        new Fire(parameters, _sendingBytes, serialNumber);
 
         Console.WriteLine($"CSV written with {snapshot.Count} rows");
     }

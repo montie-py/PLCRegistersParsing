@@ -11,7 +11,7 @@ public class ModbusServerHost
         ModBusServerPort = int.TryParse(Environment.GetEnvironmentVariable("SERVER_PORT"),
             out var serverPort)
             ? serverPort
-            : 502;
+            : 3703;
         Server = new ModbusServer
         {
             Port = ModBusServerPort,
