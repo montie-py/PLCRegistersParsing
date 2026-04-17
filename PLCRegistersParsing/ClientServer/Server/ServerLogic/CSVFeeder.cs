@@ -1,24 +1,42 @@
 ﻿using EasyModbus;
+using PLCRegistersParsing.Config;
 
 namespace PLCRegistersParsing.Simulation.ServerLogic;
 
 public class CSVFeeder
 {
     private readonly string _csvPath;
+    private ConfigurationSettings? configurationSettings;
 
     public CSVFeeder()
     {
-        _csvPath = Path.Combine(AppContext.BaseDirectory, "input.csv");;
+        _csvPath = Path.Combine(AppContext.BaseDirectory, "input.csv");
     }
 
-    public void Start(Action<List<short>> sendCSVvalues)
+    public void Start(Action<List<short>> sendCSVvalues, ConfigurationSettings? configurationSettings)
     {
-        var thread = new Thread(() => FeedLoop(sendCSVvalues))
+        this.configurationSettings = configurationSettings;
+        var thread = new Thread(() => FeedLoopHandler(sendCSVvalues))
         {
             IsBackground = true
         };
 
         thread.Start();
+    }
+
+    private void FeedLoopHandler(Action<List<short>> sendCSVvalues)
+    {
+        if (!configurationSettings!.GenerateRegistersValuesInALoop)
+        {
+            FeedLoop(sendCSVvalues);
+        }
+        else
+        {
+            while (true)
+            {
+                FeedLoop(sendCSVvalues);
+            }
+        }
     }
 
     private void FeedLoop(Action<List<short>> sendCSVvalues)

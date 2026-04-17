@@ -23,7 +23,7 @@ public class PublishToPLC : IRunnable
                 plcPublisher.Client.WriteMultipleRegisters(0, intValued.ToArray());
             }
         };
-        feeder.Start(sendCSVvalues);
+        feeder.Start(sendCSVvalues, configurationSettings);
        
 
         Thread.Sleep(Timeout.Infinite);

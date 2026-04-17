@@ -16,7 +16,7 @@ public class ServerSimulation : IRunnable
                 host.Server.holdingRegisters[i+1] = values[i];
             }
         };
-        feeder.Start(sendCSVvalues);
+        feeder.Start(sendCSVvalues, configurationSettings);
         host.Start();
 
         Thread.Sleep(Timeout.Infinite);
