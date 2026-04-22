@@ -6,16 +6,17 @@ namespace PLCRegistersParsing.Simulation.ServerLogic;
 public class CSVFeeder
 {
     private readonly string _csvPath;
-    private ConfigurationSettings? configurationSettings;
+
+    private static bool _generateRegistersValuesInALoop =
+        bool.TryParse(Environment.GetEnvironmentVariable("GENERATE_REGISTERS_VALUES_IN_LOOP"), out var value) && value;
 
     public CSVFeeder()
     {
         _csvPath = Path.Combine(AppContext.BaseDirectory, "input.csv");
     }
 
-    public void Start(Action<List<short>> sendCSVvalues, ConfigurationSettings? configurationSettings)
+    public void Start(Action<List<short>> sendCSVvalues)
     {
-        this.configurationSettings = configurationSettings;
         var thread = new Thread(() => FeedLoopHandler(sendCSVvalues))
         {
             IsBackground = true
@@ -26,7 +27,7 @@ public class CSVFeeder
 
     private void FeedLoopHandler(Action<List<short>> sendCSVvalues)
     {
-        if (!configurationSettings!.GenerateRegistersValuesInALoop)
+        if (_generateRegistersValuesInALoop)
         {
             FeedLoop(sendCSVvalues);
         }
