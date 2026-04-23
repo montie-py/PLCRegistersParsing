@@ -97,7 +97,7 @@ public class Client : IPublisher, IRunnable
 
                 int[] registers =
                     deviceRuntime.Connection!.ReadHoldingRegisters(deviceRuntime.Config!.RegistersRangeFrom,
-                        deviceRuntime.Config.RegistersRangeTo);
+                        deviceRuntime.Config.RegistersRangeQuantity);
 
                 lock (deviceRuntime.BufferLock)
                 {
