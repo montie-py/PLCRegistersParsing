@@ -19,11 +19,11 @@ namespace PLCRegistersParsing.Publisher.Entities
         public string? ModuleName { get; set; }
         public string? SerialNumber { get; set; }
 
-        public List<List<ParameterBase>> ParametersList { get; private set; }
+        public Dictionary<string, List<ParameterBase>> ParametersList { get; private set; }
         public List<UnitData> UnitData { get; private set; }
 
 
-        public Unit(string name, Options options, List<List<ParameterBase>> parametersList, int transmissionInterval, int measurementInterval)
+        public Unit(string name, Options options, Dictionary<string, List<ParameterBase>> parametersList, int transmissionInterval, int measurementInterval)
         {
             Name = name;
             UserName = options.Username;

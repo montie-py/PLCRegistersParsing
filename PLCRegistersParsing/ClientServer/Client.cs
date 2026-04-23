@@ -13,8 +13,6 @@ using System.Threading;
 public class Client : IPublisher, IRunnable
 {
     static bool _isDebugMode = bool.TryParse(Environment.GetEnvironmentVariable("DEBUG"), out var value) && value;
-    static bool _sendingBytes =
-        bool.TryParse(Environment.GetEnvironmentVariable("SENDING_BYTES"), out var value) && value;
 
     public static async Task Run(List<DeviceConfig> devicesConfigs)
     {
@@ -33,7 +31,7 @@ public class Client : IPublisher, IRunnable
             if (!localConnection.Connected)
                 localConnection.Connect();
             
-            List<List<string>> csvOutputList = new();
+            List<KeyValuePair<string, List<string>>> csvOutputList = new();
             ManualResetEventSlim pauseEvent = new(false);
             object listLock = new();
 
@@ -135,12 +133,15 @@ public class Client : IPublisher, IRunnable
                         decodeMapIndex++;
                     }
 
+                    string timeStamp = DateTime.UtcNow.ToString("yyMMddHHmmss");
+
                     if (_isDebugMode)
                     {
-                        Console.WriteLine("Registers: " + string.Join(", ", parsedRegisters));
+                        var parsedRegistersJoined = string.Join(", ", parsedRegisters);
+                        Console.WriteLine($"Timestamp: {timeStamp} Registers: {parsedRegistersJoined}");
                     }
 
-                    deviceRuntime.CsvBuffer.Add(parsedRegisters);
+                    deviceRuntime.CsvBuffer.Add(new KeyValuePair<string, List<string>>(timeStamp, parsedRegisters));
                 }
                 
                 Thread.Sleep(int.TryParse(Environment.GetEnvironmentVariable("POLLING_LOOP_INTERVAL_MILLS"),
@@ -167,7 +168,7 @@ public class Client : IPublisher, IRunnable
                     ? intervalMills
                     : 1000);
 
-                List<List<string>> snapshot;
+                List<KeyValuePair<string, List<string>>> snapshot;
 
                 // pause polling
                 lock (deviceRuntime.BufferLock)
@@ -176,7 +177,7 @@ public class Client : IPublisher, IRunnable
                         continue;
 
                     deviceRuntime.PauseEvent.Set();
-                    snapshot = new List<List<string>>(deviceRuntime.CsvBuffer);
+                    snapshot = new List<KeyValuePair<string, List<string>>>(deviceRuntime.CsvBuffer);
                     deviceRuntime.CsvBuffer.Clear();
                 }
 
@@ -202,46 +203,29 @@ public class Client : IPublisher, IRunnable
         }
     }
 
-    private static void SendingDataToFieldTracker(List<List<string>> snapshot, string serialNumber, string outputFileName)
+    private static void SendingDataToFieldTracker(List<KeyValuePair<string, List<string>>> snapshot, string serialNumber, string outputFileName)
     {
-        List<List<ParameterBase>> parameters = new();
-
-        if (_sendingBytes)
+        Dictionary<string, List<ParameterBase>> parameters = new();
+        
+        var pollingValuesHeadersArray = PollingValuesHeaders.PollingValuesHeadersArray;
+        foreach (var entry in snapshot)
         {
-            ParameterBase fireParameter = new BytesParameter
+            List<ParameterBase> rowParameters = new();
+            for (int i  = 0; i < entry.Value.Count; i++)
             {
-                Value = File.ReadAllBytes(outputFileName),
-                Abbreviation = "Output",
-                Name = "CWTOutput",
-                MeasurementUnit = "CsvFile"
-            };
-
-            List<ParameterBase> fireParameters = new ([fireParameter]);
-
-            parameters.Add(fireParameters);
-        }
-        else
-        {
-            var pollingValuesHeadersArray = PollingValuesHeaders.PollingValuesHeadersArray;
-            foreach (var row in snapshot)
-            {
-                List<ParameterBase> rowParameters = new();
-                for (int i = 0; i < row.Count; i++)
+                StringParameter fireParameter = new()
                 {
-                    StringParameter fireParameter = new()
-                    {
-                        Value = row[i],
-                        Abbreviation = pollingValuesHeadersArray[i].Abbreviation,
-                        Name = pollingValuesHeadersArray[i].Abbreviation,
-                        MeasurementUnit = pollingValuesHeadersArray[i].MeasurementUnit
-                    };
-                    rowParameters.Add(fireParameter);
-                }
-                parameters.Add(rowParameters);
+                    Value = entry.Value[i],
+                    Abbreviation = pollingValuesHeadersArray[i].Abbreviation,
+                    Name = pollingValuesHeadersArray[i].Abbreviation,
+                    MeasurementUnit = pollingValuesHeadersArray[i].MeasurementUnit
+                };
+                rowParameters.Add(fireParameter);   
             }
+            parameters.Add(entry.Key, rowParameters);
         }
 
-        new Fire(parameters, _sendingBytes, serialNumber);
+        new Fire(parameters, serialNumber);
 
         Console.WriteLine($"CSV written with {snapshot.Count} rows");
     }

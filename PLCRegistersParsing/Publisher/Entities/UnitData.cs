@@ -81,19 +81,11 @@ namespace PLCRegistersParsing.Publisher.Entities
             if (Unit != null) Unit.CurrentStatus = status;
         }
 
-        public void CreateMessage(bool sendingBytes = false, bool settingMessageHeader = true)
+        public void CreateMessage(bool settingMessageHeader = true)
         {
             SetHeader();
-            GenerateMessage(sendingBytes:sendingBytes, settingMessageHeader:settingMessageHeader);
-
-            if (sendingBytes)
-            {
-                OriginalFullMessageBytes = OriginalContentBytesArray;
-            }
-            else
-            {
-                OriginalFullMessage = OriginalHeader + OriginalContent;
-            }
+            GenerateMessage(settingMessageHeader:settingMessageHeader);
+            OriginalFullMessage = OriginalHeader + OriginalContent;
         }
 
         public void AssembleMessage()
@@ -112,7 +104,7 @@ namespace PLCRegistersParsing.Publisher.Entities
             int transmissionIntervalSeconds = Unit!.TransmissionInterval * 60;
 
             OriginalHeader =
-                $"CMD=1&MODULE={Unit.ModuleName}&V=1.0&SN={Unit.Name}&NAME={Unit.Name}&INT={transmissionIntervalSeconds}&USR=\"{Unit.UserName}\"&PSW=\"{HashedPassword}\"";
+                $"CMD=1&MODULE={Unit.ModuleName}&V=1.0&SN={Unit.SerialNumber}&NAME={Unit.Name}&INT={transmissionIntervalSeconds}&USR=\"{Unit.UserName}\"&PSW=\"{HashedPassword}\"";
 
             if (Unit.UseEncryption)
             {
@@ -122,23 +114,23 @@ namespace PLCRegistersParsing.Publisher.Entities
             OriginalHeader += "\r\n";
         }
 
-        private void GenerateMessage(bool sendingBytes = false, bool settingMessageHeader = true)
+        private void GenerateMessage(bool settingMessageHeader = true)
         {
             // Checks how many measurements are necessary
             int measurementQuantity = Unit!.TransmissionInterval / Unit.MeasurementInterval;
             string message = "";
             byte[] messageBytes = Encoding.UTF8.GetBytes(message);
-
-            for (int i = 0; i < Unit.ParametersList.Count; i++)
+            int parametersListLoopCounter = 0;
+            foreach (KeyValuePair<string, List<ParameterBase>> entry in Unit.ParametersList)
             {
                 if (settingMessageHeader)
                 {
-                    message += SetMeasurementsHeader(Unit.ParametersList[i]);
+                    message += SetMeasurementsHeader(parameters:entry.Value);
                 }
             
                 for (int j = measurementQuantity - 1; j >= 0; j--)
                 {
-                    string measurementDateTime = DateTime.UtcNow.AddMinutes(-j).ToString("yyMMddHHmmss");
+                    // string measurementDateTime = DateTime.UtcNow.AddMinutes(-j).ToString("yyMMddHHmmss");
                     string systemErrorLog = "";
 
                     // Random rnd = new Random();
@@ -150,40 +142,20 @@ namespace PLCRegistersParsing.Publisher.Entities
                     //     systemErrorLog = GenerateSystemErrorLog(measurementDateTime);
                     //     message += systemErrorLog;
                     // }
-
-                    if (sendingBytes)
-                    {
-                        //adding systemErrorLog to byte[]
-                        var systemErrorLogBytes = Encoding.UTF8.GetBytes(systemErrorLog);
-                        messageBytes = messageBytes.Concat(systemErrorLogBytes).ToArray();
                     
-                        //adding byteArray of the CSV file to the final byte[] array
-                        messageBytes = messageBytes.Concat(((BytesParameter)Unit.ParametersList[i][0]).Value!).ToArray();
-                    }
-                    else
-                    {
-                        // Generates measurements
-                        message += GenerateMeasurements(Unit.ParametersList[i], measurementDateTime);
-                    }
+                    // Generates measurements
+                    message += GenerateMeasurements(timeStamp:entry.Key, parameters:entry.Value);
 
-                    if (i == Unit.ParametersList.Count - 1)
+                    if (parametersListLoopCounter == Unit.ParametersList.Count - 1)
                     {
                         message += "\r\n";
                     }
-                        
+
+                    ++parametersListLoopCounter;
                 }
             }
-
-            //adding EOF
-            if (sendingBytes)
-            {
-                byte[] eof = { 13, 10, 26 };
-                OriginalContentBytesArray = messageBytes.Concat(eof).ToArray();
-            }
-            else
-            {
-                OriginalContent = message + (char)13 + (char)10 + (char)26;
-            }
+            
+            OriginalContent = message + (char)13 + (char)10 + (char)26;
         }
 
         private string SetMeasurementsHeader(List<ParameterBase> parameters)
@@ -199,9 +171,9 @@ namespace PLCRegistersParsing.Publisher.Entities
             return messageHeader;
         }
 
-        private string GenerateMeasurements(List<ParameterBase> parameters, string measurementTime)
+        private string GenerateMeasurements(string timeStamp, List<ParameterBase> parameters)
         {
-            string measurementLine = $"D;{measurementTime}";
+            string measurementLine = $"D;{timeStamp}";
 
             foreach (ParameterBase parameter in parameters)
             {

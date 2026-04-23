@@ -13,16 +13,14 @@ namespace PLCRegistersParsing.Publisher;
 public class Fire
 {
     private const string UnitName = "CWTUnit";
-    private List<List<ParameterBase>> UnitParameters { get; set; }
+    private Dictionary<string, List<ParameterBase>> UnitParameters { get; set; }
     private Options FiringOptions { get; set; }
-    private bool SendingBytes  { get; set; }
     
     private static bool SettingMessageHeader = bool.TryParse(Environment.GetEnvironmentVariable("SET_MESSAGE_HEADER"), out var value) && value;
 
-    public Fire(List<List<ParameterBase>> unitParameters, bool sendingBytes, string serialNumber)
+    public Fire(Dictionary<string, List<ParameterBase>> unitParameters, string serialNumber)
     {
         UnitParameters = unitParameters;
-        SendingBytes = sendingBytes;
         var creds = new ServerCredentials(
             Environment.GetEnvironmentVariable("SERVER_HOST")!,
             int.Parse(Environment.GetEnvironmentVariable("SERVER_PORT")!),
@@ -81,10 +79,10 @@ public class Fire
                 ReceiveChallenge(unitData);
                 
                 // Create the header
-                CreateMessage(unitData, sendingBytes:SendingBytes, settingMessageHeader:SettingMessageHeader);
+                CreateMessage(unitData, settingMessageHeader:SettingMessageHeader);
                 
                 // Encrypt Message
-                EncryptMessage(unitData, sendingBytes:SendingBytes);
+                EncryptMessage(unitData);
                 
                 // Assemble Message
                 AssembleMessage(unitData);
@@ -146,20 +144,16 @@ public class Fire
         }
     }
     
-    private void CreateMessage(UnitData unitData, bool sendingBytes = false, bool settingMessageHeader = true)
+    private void CreateMessage(UnitData unitData, bool settingMessageHeader = true)
     {
-        unitData.CreateMessage(sendingBytes:sendingBytes, settingMessageHeader:settingMessageHeader);
+        unitData.CreateMessage(settingMessageHeader:settingMessageHeader);
     }
     
-    private void EncryptMessage(UnitData unitData, bool sendingBytes = false)
+    private void EncryptMessage(UnitData unitData)
     {
         string key = EncryptionService.GenerateMD5String($"{unitData.Challenge}{FiringOptions.Password}");
-        object encryptionContent = unitData.OriginalContent!;
-        if (sendingBytes)
-        {
-            encryptionContent = unitData.OriginalContentBytesArray!;
-        }
-        unitData.ContentBytes = EncryptionService.Encrypt(encryptionContent, key, sendingBytes:sendingBytes);
+
+        unitData.ContentBytes = EncryptionService.Encrypt(unitData.OriginalContent!, key);
     }
     
     private void SendMessage(UnitData unitData)
