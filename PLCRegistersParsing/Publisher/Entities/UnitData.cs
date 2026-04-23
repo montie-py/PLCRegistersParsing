@@ -101,10 +101,10 @@ namespace PLCRegistersParsing.Publisher.Entities
         private void SetHeader()
         {
             SetHeashedPassword();
-            int transmissionIntervalSeconds = Unit!.TransmissionInterval * 60;
+            int transmissionIntervalSeconds = 60;
 
             OriginalHeader =
-                $"CMD=1&MODULE={Unit.ModuleName}&V=1.0&SN={Unit.SerialNumber}&NAME={Unit.Name}&INT={transmissionIntervalSeconds}&USR=\"{Unit.UserName}\"&PSW=\"{HashedPassword}\"";
+                $"CMD=1&MODULE={Unit!.ModuleName}&V=1.0&SN={Unit.SerialNumber}&NAME={Unit.Name}&INT={transmissionIntervalSeconds}&USR=\"{Unit.UserName}\"&PSW=\"{HashedPassword}\"";
 
             if (Unit.UseEncryption)
             {
@@ -116,42 +116,20 @@ namespace PLCRegistersParsing.Publisher.Entities
 
         private void GenerateMessage(bool settingMessageHeader = true)
         {
-            // Checks how many measurements are necessary
-            int measurementQuantity = Unit!.TransmissionInterval / Unit.MeasurementInterval;
             string message = "";
-            byte[] messageBytes = Encoding.UTF8.GetBytes(message);
             int parametersListLoopCounter = 0;
-            foreach (KeyValuePair<string, List<ParameterBase>> entry in Unit.ParametersList)
+            foreach (KeyValuePair<string, List<ParameterBase>> entry in Unit!.ParametersList)
             {
                 if (settingMessageHeader)
                 {
                     message += SetMeasurementsHeader(parameters:entry.Value);
                 }
             
-                for (int j = measurementQuantity - 1; j >= 0; j--)
+                message += GenerateMeasurements(timeStamp:entry.Key, parameters:entry.Value);
+
+                if (parametersListLoopCounter == Unit.ParametersList.Count - 1)
                 {
-                    // string measurementDateTime = DateTime.UtcNow.AddMinutes(-j).ToString("yyMMddHHmmss");
-                    string systemErrorLog = "";
-
-                    // Random rnd = new Random();
-                    // int randomNumber = rnd.Next(0, 30);
-                    //
-                    // // Randomly generates a system error just for fun
-                    // if (randomNumber == 0)
-                    // {
-                    //     systemErrorLog = GenerateSystemErrorLog(measurementDateTime);
-                    //     message += systemErrorLog;
-                    // }
-                    
-                    // Generates measurements
-                    message += GenerateMeasurements(timeStamp:entry.Key, parameters:entry.Value);
-
-                    if (parametersListLoopCounter == Unit.ParametersList.Count - 1)
-                    {
-                        message += "\r\n";
-                    }
-
-                    ++parametersListLoopCounter;
+                    message += "\r\n";
                 }
             }
             

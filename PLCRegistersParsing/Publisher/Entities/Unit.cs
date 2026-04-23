@@ -12,8 +12,6 @@ namespace PLCRegistersParsing.Publisher.Entities
         public string Password { get; private set; }
         public bool UseEncryption { get; private set; }
         public UnitStatusEnum CurrentStatus { get; set; }
-        public int MeasurementInterval { get; set; }
-        public int TransmissionInterval { get; set; }
         public int ChallengeWaitTimeMode { get; set; }
         public int ACKWaitTimeMode { get; set; }
         public string? ModuleName { get; set; }
@@ -23,7 +21,7 @@ namespace PLCRegistersParsing.Publisher.Entities
         public List<UnitData> UnitData { get; private set; }
 
 
-        public Unit(string name, Options options, Dictionary<string, List<ParameterBase>> parametersList, int transmissionInterval, int measurementInterval)
+        public Unit(string name, Options options, Dictionary<string, List<ParameterBase>> parametersList)
         {
             Name = name;
             UserName = options.Username;
@@ -33,8 +31,6 @@ namespace PLCRegistersParsing.Publisher.Entities
             ACKWaitTimeMode = options.WaitAck;
             UnitData = new List<UnitData>();
             ParametersList = parametersList;
-            TransmissionInterval = transmissionInterval;
-            MeasurementInterval = measurementInterval > transmissionInterval ? transmissionInterval : measurementInterval;
         }
 
         public UnitData NewUnitData()

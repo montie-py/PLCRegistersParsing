@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Text;
-using PLCRegistersParsing.Config;
+﻿using System.Text;
 using PLCRegistersParsing.Publisher.Entities;
 using PLCRegistersParsing.Publisher.Enums;
 using PLCRegistersParsing.Publisher.Services;
@@ -39,8 +34,6 @@ public class Fire
             UnitNamePrefix: creds.UnitNamePrefix,
             TransmissionDelay: 1,
             UnitsQuantity: 1,
-            UnitTransmissionInterval: 5,
-            MeasurementsTimeInterval: 5,
             WaitChallenge: 2000,
             WaitAck: 2000
         );
@@ -55,11 +48,8 @@ public class Fire
     {
         var unitName = UnitName;
         var unitParameters = UnitParameters;
-        var unitTransmissionInterval = FiringOptions.UnitTransmissionInterval;
-        var measurementsInterval = FiringOptions.MeasurementsTimeInterval;
 
-        Unit unit = new Unit(unitName, FiringOptions, unitParameters, unitTransmissionInterval,
-            measurementsInterval);
+        Unit unit = new Unit(unitName, FiringOptions, unitParameters);
         return unit;
     }
 

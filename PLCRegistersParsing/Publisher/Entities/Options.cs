@@ -11,8 +11,6 @@ public sealed record Options(
     int UnitsCount,
     int TransmissionDelay,
     int UnitsQuantity,
-    int UnitTransmissionInterval,
-    int MeasurementsTimeInterval,
     int WaitChallenge,
     int WaitAck,
     bool UseEncryption = true
