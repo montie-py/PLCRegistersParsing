@@ -13,6 +13,8 @@ public class Fire
     
     private static bool SettingMessageHeader = bool.TryParse(Environment.GetEnvironmentVariable("SET_MESSAGE_HEADER"), out var value) && value;
 
+    private CancellationToken Token { get; set; }
+
     public Fire(Dictionary<string, List<ParameterBase>> unitParameters, string serialNumber)
     {
         UnitParameters = unitParameters;
@@ -41,7 +43,8 @@ public class Fire
         var unit = CreateUnit();
         unit.ModuleName = creds.ModuleName;
         unit.SerialNumber = serialNumber;
-        HandleUnit(unit);
+        Token = new CancellationToken();
+        HandleUnit(unit, Token);
     }
 
     private Unit CreateUnit()
@@ -53,10 +56,10 @@ public class Fire
         return unit;
     }
 
-    private void HandleUnit(Unit unit)
+    private void HandleUnit(Unit unit, CancellationToken token)
     {
-        // do
-        // {
+        while (!token.IsCancellationRequested)
+        {
             try
             {
                 UnitData unitData = unit.NewUnitData();
@@ -85,13 +88,17 @@ public class Fire
                 
                 // Finish connection
                 CloseConnection(unitData);
+                return;
             }
             catch (Exception e)
             {
                 Console.WriteLine(e);
-                throw;
+                Console.WriteLine($"HandleUnit failed: {e.Message}");
+                Console.WriteLine("Retrying...");
+                
+                Thread.Sleep(1000);
             }
-        // } while (!token.IsCancellationRequested);
+        }
     }
     
     private void SetUnitDataParams(UnitData unitData)
@@ -116,7 +123,6 @@ public class Fire
         {
             byte[] receivedChallenge = TCPService.ReadData(unitData.Client!, unitData.ChallengeWaitTime).Result;
             string challenge = Encoding.ASCII.GetString(receivedChallenge);
-
             unitData.SetChallenge(challenge, DateTime.Now);
         }
         catch (AggregateException ex)
