@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System.Net.Sockets;
+using System.Text;
 using PLCRegistersParsing.Publisher.Entities;
 using PLCRegistersParsing.Publisher.Enums;
 using PLCRegistersParsing.Publisher.Services;
@@ -9,85 +10,66 @@ public class Fire
 {
     private const string UnitName = "CWTUnit";
     private Dictionary<string, List<ParameterBase>> UnitParameters { get; set; }
-    private Options FiringOptions { get; set; }
-    
-    private static bool SettingMessageHeader = bool.TryParse(Environment.GetEnvironmentVariable("SET_MESSAGE_HEADER"), out var value) && value;
+
+    private static bool IsMessageHeaderSet =
+        bool.TryParse(Environment.GetEnvironmentVariable("SET_MESSAGE_HEADER"), out var value) && value;
 
     private CancellationToken Token { get; set; }
+    
+    private Unit Unit { get; set; }
 
     public Fire(Dictionary<string, List<ParameterBase>> unitParameters, string serialNumber)
     {
         UnitParameters = unitParameters;
-        var creds = new ServerCredentials(
-            Environment.GetEnvironmentVariable("SERVER_HOST")!,
-            int.Parse(Environment.GetEnvironmentVariable("SERVER_PORT")!),
-            Environment.GetEnvironmentVariable("SERVER_USER")!,
-            Environment.GetEnvironmentVariable("SERVER_PASS")!,
-            Environment.GetEnvironmentVariable("UNIT_NAME_PREFIX")!,
-            Environment.GetEnvironmentVariable("MODULE_NAME") ?? "CWT"
-        );
-
-        FiringOptions = new Options(
-            Host: creds.Host,
-            Port: creds.Port,
-            Username: creds.Username,
-            Password: creds.Password,
-            UnitsCount: creds.UnitsCount,
-            UnitNamePrefix: creds.UnitNamePrefix,
-            TransmissionDelay: 1,
-            UnitsQuantity: 1,
-            WaitChallenge: 2000,
-            WaitAck: 2000
-        );
-        
-        var unit = CreateUnit();
-        unit.ModuleName = creds.ModuleName;
-        unit.SerialNumber = serialNumber;
+        Unit = new Unit();
+        CreateUnit(serialNumber);
         Token = new CancellationToken();
-        HandleUnit(unit, Token);
+        HandleUnit(Token);
     }
 
-    private Unit CreateUnit()
+    private void CreateUnit(string serialNumber)
     {
-        var unitName = UnitName;
-        var unitParameters = UnitParameters;
-
-        Unit unit = new Unit(unitName, FiringOptions, unitParameters);
-        return unit;
+        Unit.Name = UnitName;
+        Unit.UserName = Environment.GetEnvironmentVariable("SERVER_USER")!;
+        Unit.Password = Environment.GetEnvironmentVariable("SERVER_PASS")!;
+        Unit.Client = new TcpClient();
+        Unit.UseEncryption = true;
+        Unit.ChallengeWaitTime = 2000;
+        Unit.AckWaitTime = 2000;
+        Unit.ParametersList = UnitParameters;
+        Unit.ModuleName = Environment.GetEnvironmentVariable("MODULE_NAME") ?? "CWT";
+        Unit.SerialNumber = serialNumber;
     }
 
-    private void HandleUnit(Unit unit, CancellationToken token)
+    private void HandleUnit(CancellationToken token)
     {
         while (!token.IsCancellationRequested)
         {
             try
             {
-                UnitData unitData = unit.NewUnitData();
-                SetUnitDataParams(unitData);
-                
                 // Send request
-                SendInitialRequest(unitData);
-                
+                SendInitialRequest();
+
                 // Receive challenge
-                ReceiveChallenge(unitData);
-                
+                ReceiveChallenge();
+
                 // Create the header
-                CreateMessage(unitData, settingMessageHeader:SettingMessageHeader);
-                
+                CreateMessage(IsMessageHeaderSet);
+
                 // Encrypt Message
-                EncryptMessage(unitData);
-                
+                EncryptMessage();
+
                 // Assemble Message
-                AssembleMessage(unitData);
-                
+                AssembleMessage();
+
                 // Send content
-                SendMessage(unitData);
-                
+                SendMessage();
+
                 // Confirm Receipt
-                ReceiveConfirmationReceipt(unitData);
-                
+                ReceiveConfirmationReceipt();
+
                 // Finish connection
-                CloseConnection(unitData);
+                CloseConnection();
                 return;
             }
             catch (Exception e)
@@ -95,35 +77,30 @@ public class Fire
                 Console.WriteLine(e);
                 Console.WriteLine($"HandleUnit failed: {e.Message}");
                 Console.WriteLine("Retrying...");
-                
+
                 Thread.Sleep(1000);
             }
         }
     }
-    
-    private void SetUnitDataParams(UnitData unitData)
-    {
-        unitData.ChallengeWaitTime = unitData.Unit!.ChallengeWaitTimeMode;
-        unitData.ACKWaitTime =unitData.Unit.ACKWaitTimeMode;
-    }
-    
-    private void SendInitialRequest(UnitData unitData)
-    {
-        unitData.SetStatus(UnitStatusEnum.Transmitting);
-        unitData.SetFirstTransmissionDateTime(DateTime.Now);
-        TCPService.Connect(unitData.Client!, FiringOptions.Host, FiringOptions.Port);
-        unitData.SetStatus(UnitStatusEnum.WaitingForChallenge);
 
-        Console.WriteLine($"Unit {unitData.Unit!.Name} sending connection request.");
+    private void SendInitialRequest()
+    {
+        Unit.SetStatus(UnitStatusEnum.Transmitting);
+        Unit.SetFirstTransmissionDateTime(DateTime.Now);
+        TCPService.Connect(Unit.Client!, Environment.GetEnvironmentVariable("SERVER_HOST")!,
+            int.Parse(Environment.GetEnvironmentVariable("SERVER_PORT")!));
+        Unit.SetStatus(UnitStatusEnum.WaitingForChallenge);
+
+        Console.WriteLine($"Unit {Unit.Name} sending connection request.");
     }
-    
-    private void ReceiveChallenge(UnitData unitData)
+
+    private void ReceiveChallenge()
     {
         try
         {
-            byte[] receivedChallenge = TCPService.ReadData(unitData.Client!, unitData.ChallengeWaitTime).Result;
+            byte[] receivedChallenge = TCPService.ReadData(Unit.Client!, Unit.ChallengeWaitTime).Result;
             string challenge = Encoding.ASCII.GetString(receivedChallenge);
-            unitData.SetChallenge(challenge, DateTime.Now);
+            Unit.SetChallenge(challenge, DateTime.Now);
         }
         catch (AggregateException ex)
         {
@@ -131,7 +108,7 @@ public class Fire
             {
                 if (e is IOException)
                 {
-                    unitData.SetStatus(UnitStatusEnum.ChallengeFailed);
+                    Unit.SetStatus(UnitStatusEnum.ChallengeFailed);
                 }
 
                 return true;
@@ -139,33 +116,35 @@ public class Fire
             throw;
         }
     }
-    
-    private void CreateMessage(UnitData unitData, bool settingMessageHeader = true)
-    {
-        unitData.CreateMessage(settingMessageHeader:settingMessageHeader);
-    }
-    
-    private void EncryptMessage(UnitData unitData)
-    {
-        string key = EncryptionService.GenerateMD5String($"{unitData.Challenge}{FiringOptions.Password}");
 
-        unitData.ContentBytes = EncryptionService.Encrypt(unitData.OriginalContent!, key);
-    }
-    
-    private void SendMessage(UnitData unitData)
+    private void CreateMessage(bool isMessageHeaderSet = true)
     {
-        TCPService.SendData(unitData.Client!, unitData.FullMessageBytes!);
-        unitData.SetStatus(UnitStatusEnum.WaitingForACK);
-        unitData.SetLastTransmittedDateTime(DateTime.Now);
+        Unit.CreateMessage(isMessageHeaderSet);
     }
-    
-    private void ReceiveConfirmationReceipt(UnitData unitData)
+
+    private void EncryptMessage()
+    {
+        string key =
+            EncryptionService.GenerateMD5String(
+                $"{Unit.Challenge}{Environment.GetEnvironmentVariable("SERVER_PASS")!}");
+
+        Unit.ContentBytes = EncryptionService.Encrypt(Unit.OriginalContent!, key);
+    }
+
+    private void SendMessage()
+    {
+        TCPService.SendData(Unit.Client!, Unit.FullMessageBytes!);
+        Unit.SetStatus(UnitStatusEnum.WaitingForACK);
+        Unit.SetLastTransmittedDateTime(DateTime.Now);
+    }
+
+    private void ReceiveConfirmationReceipt()
     {
         try
         {
-            byte[] receivedConfirmation = TCPService.ReadData(unitData.Client!, unitData.ACKWaitTime).Result;
+            byte[] receivedConfirmation = TCPService.ReadData(Unit.Client!, Unit.AckWaitTime).Result;
             string challenge = Encoding.ASCII.GetString(receivedConfirmation);
-            unitData.SetACKReceived(DateTime.Now);
+            Unit.SetACKReceived(DateTime.Now);
         }
         catch (AggregateException ex)
         {
@@ -173,7 +152,7 @@ public class Fire
             {
                 if (e is IOException)
                 {
-                    unitData.SetStatus(UnitStatusEnum.ACKFailed);
+                    Unit.SetStatus(UnitStatusEnum.ACKFailed);
                 }
 
                 return true;
@@ -182,18 +161,17 @@ public class Fire
             throw;
         }
     }
-    
-    private void CloseConnection(UnitData unitData)
-    {
-        TCPService.CloseConnection(unitData.Client!);
 
-        unitData.SetStatus(UnitStatusEnum.WaitingToTransmit);
-        unitData.Status = UnitStatusEnum.Finished;
-    }
-    
-    private void AssembleMessage(UnitData unitData)
+    private void CloseConnection()
     {
-        unitData.AssembleMessage();
+        TCPService.CloseConnection(Unit.Client!);
+
+        Unit.SetStatus(UnitStatusEnum.WaitingToTransmit);
+        Unit.CurrentStatus = UnitStatusEnum.Finished;
     }
 
+    private void AssembleMessage()
+    {
+        Unit.AssembleMessage();
+    }
 }
