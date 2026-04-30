@@ -144,13 +144,14 @@ public class Client : IPublisher, IRunnable
                         Console.WriteLine($"Timestamp: {timeStamp} Registers: {parsedRegistersJoined}");
                     }
 
-                    deviceRuntime.RegistersBuffer.Enqueue(new KeyValuePair<string, List<string>>(timeStamp, parsedRegisters));
+                    deviceRuntime.RegistersBuffer.Enqueue(
+                        new KeyValuePair<string, List<string>>(timeStamp, parsedRegisters));
                     var registersBufferMaxRowsLimit = int.TryParse(
                         Environment.GetEnvironmentVariable("REGISTERS_BUFFER_MAX_ROWS"),
                         out var registersBufferMaxRows)
                         ? registersBufferMaxRows
                         : 3600;
-                    
+
                     // if the current queue with registers' data is more then the limit due to, for example,
                     // Azure connection disruption - remove oldest entries first
                     while (deviceRuntime.RegistersBuffer.Count > registersBufferMaxRowsLimit)
@@ -182,25 +183,32 @@ public class Client : IPublisher, IRunnable
 
                 // pause polling
                 // deviceRuntime.PauseEvent.Set();
-                    
-                //generating a separate CSV file (not for fieldtracker)
-                using (var writer = new StreamWriter(deviceRuntime.OutputFilename!))
+
+                var isCsvGenerating =
+                    bool.TryParse(Environment.GetEnvironmentVariable("IS_CSV_GENERATED"), out var value) && value;
+
+                if (isCsvGenerating)
                 {
-                    foreach (var row in deviceRuntime.RegistersBuffer)
+                    //generating a separate CSV file (not for fieldtracker)
+                    using (var writer = new StreamWriter(deviceRuntime.OutputFilename!))
                     {
-                        writer.WriteLine(string.Join(",", row));
-                    }
+                        foreach (var row in deviceRuntime.RegistersBuffer)
+                        {
+                            writer.WriteLine(string.Join(",", row));
+                        }
+                    }   
                 }
+                
 
                 //sending data to fieldtracker
                 SendingDataToFieldTracker(deviceRuntime.RegistersBuffer, deviceRuntime.Config!.SerialNumber!);
-                
+
                 //empty RegistersBuffer
                 deviceRuntime.RegistersBuffer.Clear();
-                
+
                 // resume polling
                 // deviceRuntime.PauseEvent.Reset();
-                
+
                 Thread.Sleep(int.TryParse(Environment.GetEnvironmentVariable("PUBLISHING_LOOP_INTERVAL_MILLS"),
                     out var intervalMills)
                     ? intervalMills

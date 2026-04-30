@@ -116,7 +116,7 @@ namespace PLCRegistersParsing.Publisher.Entities
         {
             string message = "";
             int parametersListLoopCounter = 0;
-            foreach (KeyValuePair<string, List<ParameterBase>> entry in ParametersList)
+            foreach (KeyValuePair<string, List<ParameterBase>> entry in ParametersList!)
             {
                 if (isMessageHeaderSet)
                 {
