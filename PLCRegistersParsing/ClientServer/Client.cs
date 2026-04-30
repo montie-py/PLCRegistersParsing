@@ -1,9 +1,11 @@
-﻿namespace PLCRegistersParsing.Simulation;
+﻿using System.Collections.Concurrent;
+
+namespace PLCRegistersParsing.Simulation;
+
 using Config;
 using Publisher;
 using Publisher.Entities;
 using ClientLogic;
-
 using EasyModbus;
 using System;
 using System.Collections.Generic;
@@ -27,11 +29,11 @@ public class Client : IPublisher, IRunnable
         {
             var localConfig = deviceConfig;
             var localConnection = new ModbusClient(localConfig.DeviceIp, localConfig.DevicePort);
-            
+
             if (!localConnection.Connected)
                 localConnection.Connect();
-            
-            List<KeyValuePair<string, List<string>>> csvOutputList = new();
+
+            ConcurrentQueue<KeyValuePair<string, List<string>>> csvOutputList = new();
             ManualResetEventSlim pauseEvent = new(false);
             object listLock = new();
 
@@ -43,23 +45,23 @@ public class Client : IPublisher, IRunnable
             };
 
             var outputFileName = $"output_{localConfig.DeviceIp}.csv";
-            
+
             var deviceRuntime = new DeviceRuntime();
             deviceRuntime.Config = localConfig;
             deviceRuntime.Connection = localConnection;
-            deviceRuntime.CsvBuffer = csvOutputList;
+            deviceRuntime.RegistersBuffer = csvOutputList;
             deviceRuntime.BufferLock = listLock;
             deviceRuntime.PauseEvent = pauseEvent;
             deviceRuntime.DecodeMap = decodeMap;
             deviceRuntime.OutputFilename = outputFileName;
-            
+
             if (!deviceRuntime.Connection.Connected)
                 deviceRuntime.Connection.Connect();
 
             tasks.Add(Task.Run(() => PollingLoop(cts.Token, deviceRuntime)));
             if (!_isDebugMode)
             {
-                tasks.Add(Task.Run(() => CsvWriterLoop(cts.Token, deviceRuntime)));
+                tasks.Add(Task.Run(() => FieldTrackerWriterLoop(cts.Token, deviceRuntime)));
             }
         }
 
@@ -70,11 +72,13 @@ public class Client : IPublisher, IRunnable
         }
         catch (Exception ex)
         {
-            var allExceptions = new AggregateException(tasks.Where(t => t.IsFaulted).SelectMany(t => t.Exception!.InnerExceptions));
+            var allExceptions =
+                new AggregateException(tasks.Where(t => t.IsFaulted).SelectMany(t => t.Exception!.InnerExceptions));
             foreach (var innerEx in allExceptions.InnerExceptions)
             {
                 Console.WriteLine($"Inner exception: {innerEx.Message}");
             }
+
             Console.WriteLine($"Outer exception: {ex.Message}");
         }
     }
@@ -85,7 +89,6 @@ public class Client : IPublisher, IRunnable
         {
             while (!token.IsCancellationRequested)
             {
-                
                 if (deviceRuntime.PauseEvent.IsSet)
                 {
                     Thread.Sleep(int.TryParse(Environment.GetEnvironmentVariable("POLLING_LOOP_PAUSE_MILLS"),
@@ -141,15 +144,26 @@ public class Client : IPublisher, IRunnable
                         Console.WriteLine($"Timestamp: {timeStamp} Registers: {parsedRegistersJoined}");
                     }
 
-                    deviceRuntime.CsvBuffer.Add(new KeyValuePair<string, List<string>>(timeStamp, parsedRegisters));
+                    deviceRuntime.RegistersBuffer.Enqueue(new KeyValuePair<string, List<string>>(timeStamp, parsedRegisters));
+                    var registersBufferMaxRowsLimit = int.TryParse(
+                        Environment.GetEnvironmentVariable("REGISTERS_BUFFER_MAX_ROWS"),
+                        out var registersBufferMaxRows)
+                        ? registersBufferMaxRows
+                        : 3600;
+                    
+                    // if the current queue with registers' data is more then the limit due to, for example,
+                    // Azure connection disruption - remove oldest entries first
+                    while (deviceRuntime.RegistersBuffer.Count > registersBufferMaxRowsLimit)
+                    {
+                        deviceRuntime.RegistersBuffer.TryDequeue(out _);
+                    }
                 }
-                
+
                 Thread.Sleep(int.TryParse(Environment.GetEnvironmentVariable("POLLING_LOOP_INTERVAL_MILLS"),
                     out var intervalMills)
                     ? intervalMills
                     : 1000);
             }
-        
         }
         catch (Exception ex)
         {
@@ -157,44 +171,40 @@ public class Client : IPublisher, IRunnable
         }
     }
 
-    static void CsvWriterLoop(CancellationToken token, DeviceRuntime deviceRuntime)
+    static void FieldTrackerWriterLoop(CancellationToken token, DeviceRuntime deviceRuntime)
     {
         try
         {
             while (!token.IsCancellationRequested)
             {
-                Thread.Sleep(int.TryParse(Environment.GetEnvironmentVariable("PUBLISHING_LOOP_INTERVAL_MILLS"),
-                    out var intervalMills)
-                    ? intervalMills
-                    : 1000);
-
-                List<KeyValuePair<string, List<string>>> snapshot;
+                if (deviceRuntime.RegistersBuffer.Count == 0)
+                    continue;
 
                 // pause polling
-                lock (deviceRuntime.BufferLock)
-                {
-                    if (deviceRuntime.CsvBuffer.Count == 0)
-                        continue;
-
-                    deviceRuntime.PauseEvent.Set();
-                    snapshot = new List<KeyValuePair<string, List<string>>>(deviceRuntime.CsvBuffer);
-                    deviceRuntime.CsvBuffer.Clear();
-                }
-
+                // deviceRuntime.PauseEvent.Set();
+                    
                 //generating a separate CSV file (not for fieldtracker)
                 using (var writer = new StreamWriter(deviceRuntime.OutputFilename!))
                 {
-                    foreach (var row in snapshot)
+                    foreach (var row in deviceRuntime.RegistersBuffer)
                     {
                         writer.WriteLine(string.Join(",", row));
                     }
                 }
 
                 //sending data to fieldtracker
-                SendingDataToFieldTracker(snapshot, deviceRuntime.Config!.SerialNumber!);
-
+                SendingDataToFieldTracker(deviceRuntime.RegistersBuffer, deviceRuntime.Config!.SerialNumber!);
+                
+                //empty RegistersBuffer
+                deviceRuntime.RegistersBuffer.Clear();
+                
                 // resume polling
-                deviceRuntime.PauseEvent.Reset();
+                // deviceRuntime.PauseEvent.Reset();
+                
+                Thread.Sleep(int.TryParse(Environment.GetEnvironmentVariable("PUBLISHING_LOOP_INTERVAL_MILLS"),
+                    out var intervalMills)
+                    ? intervalMills
+                    : 1000);
             }
         }
         catch (Exception ex)
@@ -203,15 +213,16 @@ public class Client : IPublisher, IRunnable
         }
     }
 
-    private static void SendingDataToFieldTracker(List<KeyValuePair<string, List<string>>> snapshot, string serialNumber)
+    private static void SendingDataToFieldTracker(ConcurrentQueue<KeyValuePair<string, List<string>>> snapshot,
+        string serialNumber)
     {
         Dictionary<string, List<ParameterBase>> parameters = new();
-        
+
         var pollingValuesHeadersArray = PollingValuesHeaders.PollingValuesHeadersArray;
         foreach (var entry in snapshot)
         {
             List<ParameterBase> rowParameters = new();
-            for (int i  = 0; i < entry.Value.Count; i++)
+            for (int i = 0; i < entry.Value.Count; i++)
             {
                 StringParameter fireParameter = new()
                 {
@@ -220,8 +231,9 @@ public class Client : IPublisher, IRunnable
                     Name = pollingValuesHeadersArray[i].Abbreviation,
                     MeasurementUnit = pollingValuesHeadersArray[i].MeasurementUnit
                 };
-                rowParameters.Add(fireParameter);   
+                rowParameters.Add(fireParameter);
             }
+
             parameters.Add(entry.Key, rowParameters);
         }
 
