@@ -29,14 +29,14 @@ public class CSVFeeder
     {
         if (_generateRegistersValuesInALoop)
         {
-            FeedLoop(sendCSVvalues);
-        }
-        else
-        {
             while (true)
             {
                 FeedLoop(sendCSVvalues);
             }
+        }
+        else
+        {
+            FeedLoop(sendCSVvalues);
         }
     }
 
@@ -69,7 +69,10 @@ public class CSVFeeder
 
             Console.WriteLine("Updated registers: " + string.Join(", ", values));
 
-            Thread.Sleep(5000);
+            Thread.Sleep( int.TryParse(Environment.GetEnvironmentVariable("FEED_VALUES_INTERVAL"),
+                out var feedValuesInterval)
+                ? feedValuesInterval
+                : 1000);
         }
     }
 }

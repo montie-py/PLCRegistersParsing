@@ -191,7 +191,7 @@ public class Client : IPublisher, IRunnable
                 }
 
                 //sending data to fieldtracker
-                SendingDataToFieldTracker(snapshot, deviceRuntime.Config!.SerialNumber!, deviceRuntime.OutputFilename!);
+                SendingDataToFieldTracker(snapshot, deviceRuntime.Config!.SerialNumber!);
 
                 // resume polling
                 deviceRuntime.PauseEvent.Reset();
@@ -203,7 +203,7 @@ public class Client : IPublisher, IRunnable
         }
     }
 
-    private static void SendingDataToFieldTracker(List<KeyValuePair<string, List<string>>> snapshot, string serialNumber, string outputFileName)
+    private static void SendingDataToFieldTracker(List<KeyValuePair<string, List<string>>> snapshot, string serialNumber)
     {
         Dictionary<string, List<ParameterBase>> parameters = new();
         
