@@ -1,15 +1,21 @@
-﻿using System;
-using System.Net.Sockets;
-using System.Text;
-using System.Threading;
+﻿using System.Net.Sockets;
 
 namespace PLCRegistersParsing.Publisher.Services
 {
     public static class TCPService
     {
-        public static void Connect(TcpClient client, string server, int port)
+        public static async void Connect(TcpClient client, string server, int port, CancellationToken ct)
         {
-            client.Connect(server, port);
+            var connectTask = client.ConnectAsync(server, port, ct);
+            try
+            {
+                await connectTask;
+            }
+            catch (OperationCanceledException)
+            {
+                Console.WriteLine("Connection to devio cancelled: timeout");
+                throw;
+            }
         }
 
         public static void SendData(TcpClient client, byte[] content)

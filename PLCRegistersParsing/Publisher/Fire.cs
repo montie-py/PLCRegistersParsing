@@ -15,7 +15,7 @@ public class Fire
         bool.TryParse(Environment.GetEnvironmentVariable("SET_MESSAGE_HEADER"), out var value) && value;
 
     private CancellationToken Token { get; set; }
-    
+
     private Unit Unit { get; set; }
 
     public Fire(Dictionary<string, List<ParameterBase>> unitParameters, string serialNumber)
@@ -87,8 +87,11 @@ public class Fire
     {
         Unit.SetStatus(UnitStatusEnum.Transmitting);
         Unit.SetFirstTransmissionDateTime(DateTime.Now);
+        CancellationTokenSource cts =
+            new CancellationTokenSource(
+                int.Parse(Environment.GetEnvironmentVariable("CONNECTION_TRYING_TIMEOUT_MILLS")!));
         TCPService.Connect(Unit.Client!, Environment.GetEnvironmentVariable("SERVER_HOST")!,
-            int.Parse(Environment.GetEnvironmentVariable("SERVER_PORT")!));
+            int.Parse(Environment.GetEnvironmentVariable("SERVER_PORT")!), cts.Token);
         Unit.SetStatus(UnitStatusEnum.WaitingForChallenge);
 
         Console.WriteLine($"Unit {Unit.Name} sending connection request.");
