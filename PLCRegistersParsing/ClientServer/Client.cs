@@ -13,7 +13,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 
-public class Client : IPublisher, IRunnable
+public class Client : IRunnable
 {
     static bool _isDebugMode = bool.TryParse(Environment.GetEnvironmentVariable("DEBUG"), out var value) && value;
     private static int RegistersBufferMaxRows { get; set; }
