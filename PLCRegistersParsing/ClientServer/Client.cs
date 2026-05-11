@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Threading.Channels;
 
 namespace PLCRegistersParsing.Simulation;
 
@@ -15,6 +16,7 @@ using System.Threading;
 public class Client : IPublisher, IRunnable
 {
     static bool _isDebugMode = bool.TryParse(Environment.GetEnvironmentVariable("DEBUG"), out var value) && value;
+    private static int RegistersBufferMaxRows { get; set; }
 
     public static async Task Run(List<DeviceConfig> devicesConfigs)
     {
@@ -33,9 +35,7 @@ public class Client : IPublisher, IRunnable
             if (!localConnection.Connected)
                 localConnection.Connect();
 
-            ConcurrentQueue<KeyValuePair<string, List<string>>> csvOutputList = new();
             ManualResetEventSlim pauseEvent = new(false);
-            object listLock = new();
 
             Dictionary<int, string> decodeMap = new()
             {
@@ -45,23 +45,44 @@ public class Client : IPublisher, IRunnable
             };
 
             var outputFileName = $"output_{localConfig.DeviceIp}.csv";
+            RegistersBufferMaxRows = int.TryParse(Environment.GetEnvironmentVariable("REGISTERS_BUFFER_MAX_ROWS"),
+                out var bufferCapacity)
+                ? bufferCapacity
+                : 3600;
 
             var deviceRuntime = new DeviceRuntime();
             deviceRuntime.Config = localConfig;
             deviceRuntime.Connection = localConnection;
-            deviceRuntime.RegistersBuffer = csvOutputList;
-            deviceRuntime.BufferLock = listLock;
+
+            //creating a channel with registersBufferMaxRows capacity
+            deviceRuntime.Channel = Channel.CreateBounded<KeyValuePair<string, List<string>>>(
+                new BoundedChannelOptions(RegistersBufferMaxRows)
+                {
+                    FullMode = BoundedChannelFullMode.DropOldest
+                });
             deviceRuntime.PauseEvent = pauseEvent;
             deviceRuntime.DecodeMap = decodeMap;
             deviceRuntime.OutputFilename = outputFileName;
+            deviceRuntime.Backlog = new ConcurrentQueue<KeyValuePair<string, List<string>>>();
+            deviceRuntime.BatchSize = int.TryParse(Environment.GetEnvironmentVariable("NR_OF_ROWS_TO_SEND"),
+                out var nrOfRowsToSend)
+                ? nrOfRowsToSend
+                : 1000;
 
             if (!deviceRuntime.Connection.Connected)
                 deviceRuntime.Connection.Connect();
 
-            tasks.Add(Task.Run(() => PollingLoop(cts.Token, deviceRuntime)));
+            //producer/consumer loops
+            tasks.Add(Task.Run(async () => await PollingLoop(cts.Token, deviceRuntime)));
             if (!_isDebugMode)
             {
-                tasks.Add(Task.Run(() => FieldTrackerWriterLoop(cts.Token, deviceRuntime)));
+                // tasks.Add(Task.Run(async () => await FieldTrackerWriterLoop(cts.Token, deviceRuntime)));
+
+                var readerTask = Task.Run(() => ReaderLoop(cts.Token, deviceRuntime));
+                var senderTask = Task.Run(() => SenderLoop(cts.Token, deviceRuntime));
+
+                tasks.Add(readerTask);
+                tasks.Add(senderTask);
             }
         }
 
@@ -83,87 +104,65 @@ public class Client : IPublisher, IRunnable
         }
     }
 
-    static void PollingLoop(CancellationToken token, DeviceRuntime deviceRuntime)
+    static async Task PollingLoop(CancellationToken token, DeviceRuntime deviceRuntime)
     {
         try
         {
             while (!token.IsCancellationRequested)
             {
-                if (deviceRuntime.PauseEvent.IsSet)
-                {
-                    Thread.Sleep(int.TryParse(Environment.GetEnvironmentVariable("POLLING_LOOP_PAUSE_MILLS"),
-                        out var pauseMills)
-                        ? pauseMills
-                        : 50);
-                    continue;
-                }
-
+                // reading holding registers
                 int[] registers =
                     deviceRuntime.Connection!.ReadHoldingRegisters(deviceRuntime.Config!.RegistersRangeFrom,
                         deviceRuntime.Config.RegistersRangeQuantity);
 
-                lock (deviceRuntime.BufferLock)
+                // decoding registers' values
+                var parsedRegisters = new List<string>();
+                for (int i = 0, decodeMapIndex = 0; i < registers.Length - 1; i++)
                 {
-                    // decoding registers' values
-                    var parsedRegisters = new List<string>();
-                    for (int i = 0, decodeMapIndex = 0; i < registers.Length - 1; i++)
+                    string registerValue;
+                    if (deviceRuntime.DecodeMap.ContainsKey(decodeMapIndex))
                     {
-                        string registerValue;
-                        if (deviceRuntime.DecodeMap.ContainsKey(decodeMapIndex))
+                        switch (deviceRuntime.DecodeMap[decodeMapIndex])
                         {
-                            switch (deviceRuntime.DecodeMap[decodeMapIndex])
-                            {
-                                case "date":
-                                    registerValue = ValueDecoders.DecodeDate(registers[i], registers[i + 1]);
-                                    i++;
-                                    break;
-                                case "time":
-                                    registerValue = ValueDecoders.DecodeTime(registers[i], registers[i + 1]);
-                                    i++;
-                                    break;
-                                default:
-                                    registerValue = ValueDecoders.DecodeInt(registers[i]);
-                                    break;
-                            }
+                            case "date":
+                                registerValue = ValueDecoders.DecodeDate(registers[i], registers[i + 1]);
+                                i++;
+                                break;
+                            case "time":
+                                registerValue = ValueDecoders.DecodeTime(registers[i], registers[i + 1]);
+                                i++;
+                                break;
+                            default:
+                                registerValue = ValueDecoders.DecodeInt(registers[i]);
+                                break;
                         }
-                        else
-                        {
-                            registerValue = ValueDecoders.DecodeFloat(registers[i], registers[i + 1]);
-                            i++;
-                        }
-
-                        parsedRegisters.Add(registerValue);
-                        decodeMapIndex++;
                     }
-
-                    string timeStamp = DateTime.UtcNow.ToString("yyMMddHHmmss");
-
-                    if (_isDebugMode)
+                    else
                     {
-                        var parsedRegistersJoined = string.Join(", ", parsedRegisters);
-                        Console.WriteLine($"Timestamp: {timeStamp} Registers: {parsedRegistersJoined}");
+                        registerValue = ValueDecoders.DecodeFloat(registers[i], registers[i + 1]);
+                        i++;
                     }
 
-                    deviceRuntime.RegistersBuffer.Enqueue(
-                        new KeyValuePair<string, List<string>>(timeStamp, parsedRegisters));
-                    var registersBufferMaxRowsLimit = int.TryParse(
-                        Environment.GetEnvironmentVariable("REGISTERS_BUFFER_MAX_ROWS"),
-                        out var registersBufferMaxRows)
-                        ? registersBufferMaxRows
-                        : 3600;
-
-                    // if the current queue with registers' data is more then the limit due to, for example,
-                    // Azure connection disruption - remove oldest entries first
-                    while (deviceRuntime.RegistersBuffer.Count > registersBufferMaxRowsLimit)
-                    {
-                        deviceRuntime.RegistersBuffer.TryDequeue(out _);
-                    }
+                    parsedRegisters.Add(registerValue);
+                    decodeMapIndex++;
                 }
 
-                Thread.Sleep(int.TryParse(Environment.GetEnvironmentVariable("POLLING_LOOP_INTERVAL_MILLS"),
+                string timeStamp = DateTime.UtcNow.ToString("yyMMddHHmmss");
+
+                if (_isDebugMode)
+                {
+                    var parsedRegistersJoined = string.Join(", ", parsedRegisters);
+                    Console.WriteLine($"Timestamp: {timeStamp} Registers: {parsedRegistersJoined}");
+                }
+
+                await deviceRuntime.Channel!.Writer.WriteAsync(
+                    new KeyValuePair<string, List<string>>(timeStamp, parsedRegisters),
+                    token);
+
+                await Task.Delay(int.TryParse(Environment.GetEnvironmentVariable("POLLING_LOOP_INTERVAL_MILLS"),
                     out var intervalMills)
                     ? intervalMills
-                    : 1000);
+                    : 1000, token);
             }
         }
         catch (Exception ex)
@@ -172,56 +171,129 @@ public class Client : IPublisher, IRunnable
         }
     }
 
-    static void FieldTrackerWriterLoop(CancellationToken token, DeviceRuntime deviceRuntime)
+    static async Task ReaderLoop(CancellationToken token, DeviceRuntime deviceRuntime)
     {
+        await foreach (var row in deviceRuntime.Channel!.Reader.ReadAllAsync(token))
+        {
+            deviceRuntime.Backlog!.Enqueue(row);
+        }
+    }
+
+    static async Task SenderLoop(CancellationToken token, DeviceRuntime deviceRuntime)
+    {
+        var batch = new ConcurrentQueue<KeyValuePair<string, List<string>>>();
+        bool lastSendFailed = false;
+
+        while (!token.IsCancellationRequested)
+        {
+            var row = new KeyValuePair<string, List<string>>();
+            // Fill batch
+            while (batch.Count < deviceRuntime.BatchSize)
+            {
+                if (deviceRuntime.Backlog!.TryDequeue(out row))
+                {
+                    batch.Enqueue(row);
+                    Console.WriteLine(batch.Count);
+                }
+            }
+
+            try
+            {
+                if (lastSendFailed)
+                {
+                    //adding the extra data to the final Queue, while it's trying to reconnect/resend data to FieldTracker
+                    while (deviceRuntime.Backlog!.TryDequeue(out var extra))
+                    {
+                        batch.Enqueue(extra);
+                    }
+
+                    //leaving the exact amount of RegistersBufferMaxRows in the batch, in case it overflows 
+                    while (batch.Count > RegistersBufferMaxRows)
+                    {
+                        batch.TryDequeue(out _);
+                    }
+                }
+
+                await SendingDataToFieldTracker(batch, deviceRuntime.Config!.SerialNumber!);
+                lastSendFailed = false;
+                batch.Clear();
+            }
+            catch
+            {
+                lastSendFailed = true;
+                Console.WriteLine($"Extra: {batch.Count}");
+                var fieldTrackerRetryDelayMils = int.TryParse(
+                    Environment.GetEnvironmentVariable("FIELDTRACKER_RETRY_DELAY_MILIS"),
+                    out var retryDelayMils)
+                    ? retryDelayMils
+                    : 1000;
+                await Task.Delay(fieldTrackerRetryDelayMils, token);
+            }
+        }
+    }
+
+    static async Task FieldTrackerWriterLoop(CancellationToken token, DeviceRuntime deviceRuntime)
+    {
+        var isCsvGenerating =
+            bool.TryParse(Environment.GetEnvironmentVariable("IS_CSV_GENERATED"), out var value) && value;
+        var howManyRowsToSend = int.TryParse(Environment.GetEnvironmentVariable("NR_OF_ROWS_TO_SEND"),
+            out var nrOfRowsToSend)
+            ? nrOfRowsToSend
+            : 1000;
+        bool lastSendFailed = false;
         try
         {
-            while (!token.IsCancellationRequested)
+            var batch = new ConcurrentQueue<KeyValuePair<string, List<string>>>();
+            await foreach (var row in deviceRuntime.Channel!.Reader.ReadAllAsync(token))
             {
-                if (deviceRuntime.RegistersBuffer.Count == 0)
-                    continue;
-
-                // pause polling
-                // deviceRuntime.PauseEvent.Set();
-
-                var isCsvGenerating =
-                    bool.TryParse(Environment.GetEnvironmentVariable("IS_CSV_GENERATED"), out var value) && value;
-
-                if (isCsvGenerating)
+                batch.Enqueue(row);
+                Console.WriteLine(batch.Count);
+                if (!lastSendFailed && batch.Count < howManyRowsToSend)
                 {
-                    //generating a separate CSV file (not for fieldtracker)
-                    using (var writer = new StreamWriter(deviceRuntime.OutputFilename!))
-                    {
-                        foreach (var row in deviceRuntime.RegistersBuffer)
-                        {
-                            writer.WriteLine(string.Join(",", row));
-                        }
-                    }   
+                    continue;
                 }
-                
 
-                //sending data to fieldtracker
-                SendingDataToFieldTracker(deviceRuntime.RegistersBuffer, deviceRuntime.Config!.SerialNumber!);
+                try
+                {
+                    // If last send failed → drain the entire channel before sending
+                    if (lastSendFailed)
+                    {
+                        while (deviceRuntime.Channel.Reader.TryRead(out var extraRow))
+                            batch.Enqueue(extraRow);
+                    }
 
-                //empty RegistersBuffer
-                deviceRuntime.RegistersBuffer.Clear();
+                    // Write CSV if needed
+                    if (isCsvGenerating)
+                    {
+                        using var writer = new StreamWriter(deviceRuntime.OutputFilename!, append: true);
+                        foreach (var item in batch)
+                        {
+                            writer.WriteLine($"{item.Key},{string.Join(",", item.Value)}");
+                        }
+                    }
 
-                // resume polling
-                // deviceRuntime.PauseEvent.Reset();
+                    await SendingDataToFieldTracker(batch, deviceRuntime.Config!.SerialNumber!);
+                    lastSendFailed = false;
+                    batch.Clear();
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                    throw;
+                }
 
-                Thread.Sleep(int.TryParse(Environment.GetEnvironmentVariable("PUBLISHING_LOOP_INTERVAL_MILLS"),
-                    out var intervalMills)
-                    ? intervalMills
-                    : 1000);
+                // reset the batch
+                batch.Clear();
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine("CsvWriterLoop Exception: " + ex.Message);
+            Console.WriteLine("WriterLoop Exception: " + ex.Message);
         }
     }
 
-    private static void SendingDataToFieldTracker(ConcurrentQueue<KeyValuePair<string, List<string>>> snapshot,
+    private static async Task<Task> SendingDataToFieldTracker(
+        ConcurrentQueue<KeyValuePair<string, List<string>>> snapshot,
         string serialNumber)
     {
         Dictionary<string, List<ParameterBase>> parameters = new();
@@ -245,8 +317,10 @@ public class Client : IPublisher, IRunnable
             parameters.Add(entry.Key, rowParameters);
         }
 
-        new Fire(parameters, serialNumber);
+        var fireObject = new Fire(parameters, serialNumber);
+        await fireObject.FireUnit();
 
         Console.WriteLine($"CSV written with {snapshot.Count} rows");
+        return Task.CompletedTask;
     }
 }

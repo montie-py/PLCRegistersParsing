@@ -2,9 +2,9 @@
 
 namespace PLCRegistersParsing.Publisher.Services
 {
-    public static class TCPService
+    public static class TcpService
     {
-        public static async void Connect(TcpClient client, string server, int port, CancellationToken ct)
+        public static async Task Connect(TcpClient client, string server, int port, CancellationToken ct)
         {
             var connectTask = client.ConnectAsync(server, port, ct);
             try
@@ -18,15 +18,15 @@ namespace PLCRegistersParsing.Publisher.Services
             }
         }
 
-        public static void SendData(TcpClient client, byte[] content)
+        public static async Task SendData(TcpClient client, byte[] content, CancellationToken ct)
         {
-            client.Client.Send(content, content.Length, SocketFlags.None);
+           await client.Client.SendAsync(content, SocketFlags.None, ct);
         }
 
         public static async Task<byte[]> ReadData(TcpClient client, int timeout)
         {
             // Waits for the data reading
-            byte[] data = await Task.Factory.StartNew(() => ReceiveData(client, timeout)).Result;
+            byte[] data = await ReceiveData(client, timeout);
 
             return data;
         }
@@ -38,7 +38,7 @@ namespace PLCRegistersParsing.Publisher.Services
             NetworkStream stream = client.GetStream();
             int bufferSize = 1;
 
-            if (stream.DataAvailable == true)
+            if (stream.DataAvailable)
             {
                 bufferSize = client.Available;
             }
@@ -49,7 +49,7 @@ namespace PLCRegistersParsing.Publisher.Services
 
             do
             {
-                stream.ReadExactly(buffer, 0, bufferSize);
+                await stream.ReadExactlyAsync(buffer, 0, bufferSize);
                 bufferList.AddRange(buffer);
                 bufferSize = client.Available;
                 buffer = new byte[bufferSize];

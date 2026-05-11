@@ -23,8 +23,13 @@ public class Fire
         UnitParameters = unitParameters;
         Unit = new Unit();
         CreateUnit(serialNumber);
-        Token = new CancellationToken();
-        HandleUnit(Token);
+        Token = new CancellationTokenSource(
+            int.Parse(Environment.GetEnvironmentVariable("CONNECTION_TRYING_TIMEOUT_MILLS")!)).Token;
+    }
+
+    public async Task FireUnit()
+    {
+        await HandleUnit();
     }
 
     private void CreateUnit(string serialNumber)
@@ -41,17 +46,17 @@ public class Fire
         Unit.SerialNumber = serialNumber;
     }
 
-    private void HandleUnit(CancellationToken token)
+    private async Task HandleUnit()
     {
-        while (!token.IsCancellationRequested)
+        while (!Token.IsCancellationRequested)
         {
             try
             {
                 // Send request
-                SendInitialRequest();
+                await SendInitialRequest();
 
                 // Receive challenge
-                ReceiveChallenge();
+                await ReceiveChallenge();
 
                 // Create the header
                 CreateMessage(IsMessageHeaderSet);
@@ -63,10 +68,10 @@ public class Fire
                 AssembleMessage();
 
                 // Send content
-                SendMessage();
+                await SendMessage();
 
                 // Confirm Receipt
-                ReceiveConfirmationReceipt();
+                await ReceiveConfirmationReceipt();
 
                 // Finish connection
                 CloseConnection();
@@ -79,29 +84,28 @@ public class Fire
                 Console.WriteLine("Retrying...");
 
                 Thread.Sleep(1000);
+                throw new Exception($"HandleUnit failed: {e.Message}");
             }
         }
     }
 
-    private void SendInitialRequest()
+    private async Task SendInitialRequest()
     {
         Unit.SetStatus(UnitStatusEnum.Transmitting);
         Unit.SetFirstTransmissionDateTime(DateTime.Now);
-        CancellationTokenSource cts =
-            new CancellationTokenSource(
-                int.Parse(Environment.GetEnvironmentVariable("CONNECTION_TRYING_TIMEOUT_MILLS")!));
-        TCPService.Connect(Unit.Client!, Environment.GetEnvironmentVariable("SERVER_HOST")!,
-            int.Parse(Environment.GetEnvironmentVariable("SERVER_PORT")!), cts.Token);
+            
+        await TcpService.Connect(Unit.Client!, Environment.GetEnvironmentVariable("SERVER_HOST")!,
+            int.Parse(Environment.GetEnvironmentVariable("SERVER_PORT")!), Token);
         Unit.SetStatus(UnitStatusEnum.WaitingForChallenge);
 
         Console.WriteLine($"Unit {Unit.Name} sending connection request.");
     }
 
-    private void ReceiveChallenge()
+    private async Task ReceiveChallenge()
     {
         try
         {
-            byte[] receivedChallenge = TCPService.ReadData(Unit.Client!, Unit.ChallengeWaitTime).Result;
+            byte[] receivedChallenge = await TcpService.ReadData(Unit.Client!, Unit.ChallengeWaitTime);
             string challenge = Encoding.ASCII.GetString(receivedChallenge);
             Unit.SetChallenge(challenge, DateTime.Now);
         }
@@ -134,18 +138,18 @@ public class Fire
         Unit.ContentBytes = EncryptionService.Encrypt(Unit.OriginalContent!, key);
     }
 
-    private void SendMessage()
+    private async Task SendMessage()
     {
-        TCPService.SendData(Unit.Client!, Unit.FullMessageBytes!);
+        await TcpService.SendData(Unit.Client!, Unit.FullMessageBytes!, Token);
         Unit.SetStatus(UnitStatusEnum.WaitingForACK);
         Unit.SetLastTransmittedDateTime(DateTime.Now);
     }
 
-    private void ReceiveConfirmationReceipt()
+    private async Task ReceiveConfirmationReceipt()
     {
         try
         {
-            byte[] receivedConfirmation = TCPService.ReadData(Unit.Client!, Unit.AckWaitTime).Result;
+            byte[] receivedConfirmation = await TcpService.ReadData(Unit.Client!, Unit.AckWaitTime);
             string challenge = Encoding.ASCII.GetString(receivedConfirmation);
             Unit.SetACKReceived(DateTime.Now);
         }
@@ -167,7 +171,7 @@ public class Fire
 
     private void CloseConnection()
     {
-        TCPService.CloseConnection(Unit.Client!);
+        TcpService.CloseConnection(Unit.Client!);
 
         Unit.SetStatus(UnitStatusEnum.WaitingToTransmit);
         Unit.CurrentStatus = UnitStatusEnum.Finished;
