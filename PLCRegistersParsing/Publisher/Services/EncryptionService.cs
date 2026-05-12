@@ -1,15 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace PLCRegistersParsing.Publisher.Services
 {
     public static class EncryptionService
     {
-        public static byte[] Encrypt(object toEncrypt, string key)
+        public static async Task<byte[]> Encrypt(object toEncrypt, string key)
         {
             byte[] cipherText;
             byte[] Key = StringToByteArray(key);
@@ -28,24 +24,17 @@ namespace PLCRegistersParsing.Publisher.Services
 
             // Create an Aes object
             // with the specified key and IV.
-            using (Aes aesAlg = Aes.Create())
-            {
-                aesAlg.Key = Key;
-                aesAlg.Mode = CipherMode.ECB;
-                aesAlg.Padding = PaddingMode.Zeros;
-                // Create a decryptor to perform the stream transform.
-                ICryptoTransform encryptor = aesAlg.CreateEncryptor(aesAlg.Key, null);
+            using Aes aesAlg = Aes.Create();
+            aesAlg.Key = Key;
+            aesAlg.Mode = CipherMode.ECB;
+            aesAlg.Padding = PaddingMode.Zeros;
+            // Create a decryptor to perform the stream transform.
+            ICryptoTransform encryptor = aesAlg.CreateEncryptor(aesAlg.Key, null);
 
-                // Create the streams used for decryption.
-                using (MemoryStream msEncrypt = new MemoryStream())
-                {
-                    using (CryptoStream csEncrypt = new CryptoStream(msEncrypt, encryptor, CryptoStreamMode.Write))
-                    {
-
-                        resultArray = encryptor.TransformFinalBlock(cipherText, 0, cipherText.Length);
-                    }
-                }
-            }
+            // Create the streams used for decryption.
+            await using MemoryStream msEncrypt = new MemoryStream();
+            await using CryptoStream csEncrypt = new CryptoStream(msEncrypt, encryptor, CryptoStreamMode.Write);
+            resultArray = encryptor.TransformFinalBlock(cipherText, 0, cipherText.Length);
 
             return resultArray;
 

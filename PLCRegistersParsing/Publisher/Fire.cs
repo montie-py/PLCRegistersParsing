@@ -62,7 +62,7 @@ public class Fire
                 CreateMessage(IsMessageHeaderSet);
 
                 // Encrypt Message
-                EncryptMessage();
+                await EncryptMessage();
 
                 // Assemble Message
                 AssembleMessage();
@@ -129,13 +129,13 @@ public class Fire
         Unit.CreateMessage(isMessageHeaderSet);
     }
 
-    private void EncryptMessage()
+    private async Task EncryptMessage()
     {
         string key =
             EncryptionService.GenerateMD5String(
                 $"{Unit.Challenge}{Environment.GetEnvironmentVariable("SERVER_PASS")!}");
 
-        Unit.ContentBytes = EncryptionService.Encrypt(Unit.OriginalContent!, key);
+        Unit.ContentBytes = await EncryptionService.Encrypt(Unit.OriginalContent!, key);
     }
 
     private async Task SendMessage()
