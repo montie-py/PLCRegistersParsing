@@ -193,7 +193,7 @@ public class Client : IRunnable
                 if (deviceRuntime.Backlog!.TryDequeue(out row))
                 {
                     batch.Enqueue(row);
-                    Console.WriteLine(batch.Count);
+                    // Console.WriteLine(batch.Count);
                 }
             }
 
@@ -221,7 +221,7 @@ public class Client : IRunnable
             catch
             {
                 lastSendFailed = true;
-                Console.WriteLine($"Extra: {batch.Count}");
+                // Console.WriteLine($"Extra: {batch.Count}");
                 var fieldTrackerRetryDelayMils = int.TryParse(
                     Environment.GetEnvironmentVariable("FIELDTRACKER_RETRY_DELAY_MILIS"),
                     out var retryDelayMils)
@@ -229,66 +229,6 @@ public class Client : IRunnable
                     : 1000;
                 await Task.Delay(fieldTrackerRetryDelayMils, token);
             }
-        }
-    }
-
-    static async Task FieldTrackerWriterLoop(CancellationToken token, DeviceRuntime deviceRuntime)
-    {
-        var isCsvGenerating =
-            bool.TryParse(Environment.GetEnvironmentVariable("IS_CSV_GENERATED"), out var value) && value;
-        var howManyRowsToSend = int.TryParse(Environment.GetEnvironmentVariable("NR_OF_ROWS_TO_SEND"),
-            out var nrOfRowsToSend)
-            ? nrOfRowsToSend
-            : 1000;
-        bool lastSendFailed = false;
-        try
-        {
-            var batch = new ConcurrentQueue<KeyValuePair<string, List<string>>>();
-            await foreach (var row in deviceRuntime.Channel!.Reader.ReadAllAsync(token))
-            {
-                batch.Enqueue(row);
-                Console.WriteLine(batch.Count);
-                if (!lastSendFailed && batch.Count < howManyRowsToSend)
-                {
-                    continue;
-                }
-
-                try
-                {
-                    // If last send failed → drain the entire channel before sending
-                    if (lastSendFailed)
-                    {
-                        while (deviceRuntime.Channel.Reader.TryRead(out var extraRow))
-                            batch.Enqueue(extraRow);
-                    }
-
-                    // Write CSV if needed
-                    if (isCsvGenerating)
-                    {
-                        using var writer = new StreamWriter(deviceRuntime.OutputFilename!, append: true);
-                        foreach (var item in batch)
-                        {
-                            writer.WriteLine($"{item.Key},{string.Join(",", item.Value)}");
-                        }
-                    }
-
-                    await SendingDataToFieldTracker(batch, deviceRuntime.Config!.SerialNumber!);
-                    lastSendFailed = false;
-                    batch.Clear();
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e);
-                    throw;
-                }
-
-                // reset the batch
-                batch.Clear();
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("WriterLoop Exception: " + ex.Message);
         }
     }
 
@@ -320,7 +260,8 @@ public class Client : IRunnable
         var fireObject = new Fire(parameters, serialNumber);
         await fireObject.FireUnit();
 
-        Console.WriteLine($"CSV written with {snapshot.Count} rows");
+        var currentDateTime = DateTime.Now;
+        Console.WriteLine($"{currentDateTime} - CSV written with {snapshot.Count} rows");
         return Task.CompletedTask;
     }
 }
