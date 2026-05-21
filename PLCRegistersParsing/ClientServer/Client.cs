@@ -16,6 +16,7 @@ using System.Threading;
 public class Client : IRunnable
 {
     static bool _isDebugMode = bool.TryParse(Environment.GetEnvironmentVariable("DEBUG"), out var value) && value;
+    private static bool _isConnectionDisrupted;
     private static int RegistersBufferMaxRows { get; set; }
 
     public static async Task Run(List<DeviceConfig> devicesConfigs)
@@ -112,17 +113,23 @@ public class Client : IRunnable
             try
             {
                 localConnection.Connect();
+                if (_isConnectionDisrupted)
+                {
+                    Console.WriteLine($"{DateTime.Now} - The connection to PLC/HMI is now established!");
+                    _isConnectionDisrupted = false;
+                }
                 return;
             }
             catch (Exception e)
             {
                 var reconnectInterval = int.TryParse(
-                    Environment.GetEnvironmentVariable("RECONNECT_TO_PLC_INTERVAL_SECONDS"),
-                    out var reconnectIntervalSec)
-                    ? reconnectIntervalSec
+                    Environment.GetEnvironmentVariable("RECONNECT_TO_PLC_INTERVAL_MILLS"),
+                    out var reconnectIntervalMills)
+                    ? reconnectIntervalMills
                     : 1000;
                 var dateTime = DateTime.Now;
                 Console.WriteLine($"{dateTime} - PLC/HMI is inaccessible: {e.Message}\n {e.StackTrace}\n Retrying...");
+                _isConnectionDisrupted = true;
                 Thread.Sleep(reconnectInterval);
             }
         }
@@ -138,6 +145,12 @@ public class Client : IRunnable
                 int[] registers =
                     deviceRuntime.Connection!.ReadHoldingRegisters(deviceRuntime.Config!.RegistersRangeFrom,
                         deviceRuntime.Config.RegistersRangeQuantity);
+                
+                if (_isConnectionDisrupted)
+                {
+                    Console.WriteLine($"{DateTime.Now} - Connection to PLC/HMI is restored!");
+                    _isConnectionDisrupted = false;
+                }
 
                 // decoding registers' values
                 var parsedRegisters = new List<string>();
@@ -190,7 +203,10 @@ public class Client : IRunnable
             }
             catch (Exception ex)
             {
-                Console.WriteLine("PollingLoop while() Exception: " + ex.Message);
+                
+                var dateTime = DateTime.Now; 
+                Console.WriteLine($"{dateTime} - Polling from PLC/HMI error: {ex.Message}\n {ex.StackTrace}\n Retrying...");
+                _isConnectionDisrupted = true;
             }
         }
     }
