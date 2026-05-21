@@ -31,9 +31,10 @@ public class Client : IRunnable
         {
             var localConfig = deviceConfig;
             var localConnection = new ModbusClient(localConfig.DeviceIp, localConfig.DevicePort);
-
             if (!localConnection.Connected)
-                localConnection.Connect();
+            {
+                Connect(localConnection, cts);
+            }
 
             ManualResetEventSlim pauseEvent = new(false);
 
@@ -104,11 +105,34 @@ public class Client : IRunnable
         }
     }
 
+    private static void Connect(ModbusClient localConnection, CancellationTokenSource cts)
+    {
+        while (!cts.IsCancellationRequested)
+        {
+            try
+            {
+                localConnection.Connect();
+                return;
+            }
+            catch (Exception e)
+            {
+                var reconnectInterval = int.TryParse(
+                    Environment.GetEnvironmentVariable("RECONNECT_TO_PLC_INTERVAL_SECONDS"),
+                    out var reconnectIntervalSec)
+                    ? reconnectIntervalSec
+                    : 1000;
+                var dateTime = DateTime.Now;
+                Console.WriteLine($"{dateTime} - PLC/HMI is inaccessible: {e.Message}\n {e.StackTrace}\n Retrying...");
+                Thread.Sleep(reconnectInterval);
+            }
+        }
+    }
+
     static async Task PollingLoop(CancellationToken token, DeviceRuntime deviceRuntime)
     {
-        try
+        while (!token.IsCancellationRequested)
         {
-            while (!token.IsCancellationRequested)
+            try
             {
                 // reading holding registers
                 int[] registers =
@@ -164,10 +188,10 @@ public class Client : IRunnable
                     ? intervalMills
                     : 1000, token);
             }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine("PollingLoop while() Exception: " + ex.Message);
+            catch (Exception ex)
+            {
+                Console.WriteLine("PollingLoop while() Exception: " + ex.Message);
+            }
         }
     }
 

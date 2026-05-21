@@ -122,6 +122,12 @@ public class Fire
             });
             throw;
         }
+        catch (Exception e)
+        {
+            var dateTime = DateTime.Now; 
+            Console.WriteLine($"{dateTime} - DevIO challenge problem: {e.Message}");
+            throw;
+        }
     }
 
     private void CreateMessage(bool isMessageHeaderSet = true)
