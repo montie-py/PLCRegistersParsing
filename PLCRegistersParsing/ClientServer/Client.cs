@@ -169,6 +169,10 @@ public class Client : IRunnable
                 {
                     skipRowsCount--;
                     await Task.Delay(pollingLoopIntervalMills, token);
+                    if (skipRowsCount == 1)
+                    {
+                       Console.WriteLine("Corrupted buffer is cleaned! Continuing polling..."); 
+                    }
                     continue;
                 }
 
