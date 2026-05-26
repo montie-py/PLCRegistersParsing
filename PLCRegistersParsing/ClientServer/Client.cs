@@ -41,9 +41,7 @@ public class Client : IRunnable
 
             Dictionary<int, string> decodeMap = new()
             {
-                { 0, "date" },
-                { 1, "time" },
-                { 2, "int" }
+                { 0, "int" }
             };
 
             var outputFileName = $"output_{localConfig.DeviceIp}.csv";
