@@ -116,6 +116,7 @@ public class Client : IRunnable
                     Console.WriteLine($"{DateTime.Now} - The connection to PLC/HMI is now established!");
                     _isConnectionDisrupted = false;
                 }
+
                 return;
             }
             catch (Exception e)
@@ -136,6 +137,12 @@ public class Client : IRunnable
     static async Task PollingLoop(CancellationToken token, DeviceRuntime deviceRuntime)
     {
         var skipRowsCount = 0;
+
+        var pollingLoopIntervalMills = int.TryParse(
+            Environment.GetEnvironmentVariable("POLLING_LOOP_INTERVAL_MILLS"),
+            out var intervalMills)
+            ? intervalMills
+            : 1000;
         while (!token.IsCancellationRequested)
         {
             try
@@ -147,9 +154,22 @@ public class Client : IRunnable
 
                 if (_isConnectionDisrupted)
                 {
-                    Console.WriteLine($"{DateTime.Now} - Connection to PLC/HMI is restored!");
+                    Console.WriteLine(
+                        $"{DateTime.Now} - Connection to PLC/HMI is restored!\nCleaning corrupted buffer...");
                     _isConnectionDisrupted = false;
-                    skipRowsCount = 10;
+
+                    skipRowsCount = int.TryParse(
+                        Environment.GetEnvironmentVariable("SKIP_ROWS_AFTER_CONNECTION_DISRUPTION"),
+                        out var skipRows)
+                        ? skipRows
+                        : 1000;
+                }
+
+                if (skipRowsCount > 0)
+                {
+                    skipRowsCount--;
+                    await Task.Delay(pollingLoopIntervalMills, token);
+                    continue;
                 }
 
                 // decoding registers' values
@@ -185,18 +205,6 @@ public class Client : IRunnable
                 }
 
                 string timeStamp = DateTime.UtcNow.ToString("yyMMddHHmmss");
-                var pollingLoopIntervalMills = int.TryParse(Environment.GetEnvironmentVariable("POLLING_LOOP_INTERVAL_MILLS"),
-                    out var intervalMills)
-                    ? intervalMills
-                    : 1000;
-                
-                if (skipRowsCount > 0)
-                {
-                    skipRowsCount--;
-                    Console.WriteLine("Skipping...");
-                    await Task.Delay(pollingLoopIntervalMills, token); 
-                    continue;
-                }
 
                 if (_isDebugMode)
                 {
@@ -212,9 +220,9 @@ public class Client : IRunnable
             }
             catch (Exception ex)
             {
-                
-                var dateTime = DateTime.Now; 
-                Console.WriteLine($"{dateTime} - Polling from PLC/HMI error: {ex.Message}\n {ex.StackTrace}\n Retrying...");
+                var dateTime = DateTime.Now;
+                Console.WriteLine(
+                    $"{dateTime} - Polling from PLC/HMI error: {ex.Message}\n {ex.StackTrace}\n Retrying...");
                 _isConnectionDisrupted = true;
             }
         }
