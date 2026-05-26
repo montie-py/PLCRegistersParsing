@@ -137,6 +137,7 @@ public class Client : IRunnable
 
     static async Task PollingLoop(CancellationToken token, DeviceRuntime deviceRuntime)
     {
+        var skipRowsCount = 0;
         while (!token.IsCancellationRequested)
         {
             try
@@ -145,11 +146,12 @@ public class Client : IRunnable
                 int[] registers =
                     deviceRuntime.Connection!.ReadHoldingRegisters(deviceRuntime.Config!.RegistersRangeFrom,
                         deviceRuntime.Config.RegistersRangeQuantity);
-                
+
                 if (_isConnectionDisrupted)
                 {
                     Console.WriteLine($"{DateTime.Now} - Connection to PLC/HMI is restored!");
                     _isConnectionDisrupted = false;
+                    skipRowsCount = 10;
                 }
 
                 // decoding registers' values
@@ -185,6 +187,18 @@ public class Client : IRunnable
                 }
 
                 string timeStamp = DateTime.UtcNow.ToString("yyMMddHHmmss");
+                var pollingLoopIntervalMills = int.TryParse(Environment.GetEnvironmentVariable("POLLING_LOOP_INTERVAL_MILLS"),
+                    out var intervalMills)
+                    ? intervalMills
+                    : 1000;
+                
+                if (skipRowsCount > 0)
+                {
+                    skipRowsCount--;
+                    Console.WriteLine("Skipping...");
+                    await Task.Delay(pollingLoopIntervalMills, token); 
+                    continue;
+                }
 
                 if (_isDebugMode)
                 {
@@ -196,10 +210,7 @@ public class Client : IRunnable
                     new KeyValuePair<string, List<string>>(timeStamp, parsedRegisters),
                     token);
 
-                await Task.Delay(int.TryParse(Environment.GetEnvironmentVariable("POLLING_LOOP_INTERVAL_MILLS"),
-                    out var intervalMills)
-                    ? intervalMills
-                    : 1000, token);
+                await Task.Delay(pollingLoopIntervalMills, token);
             }
             catch (Exception ex)
             {
